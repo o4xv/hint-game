@@ -1,0 +1,25 @@
+node_modules/
+.env
+client/.env
+client/.env.local
+server/.env
+dist/
+coverage/
+e2e/test-results/
+e2e/playwright-report/
+.eslintcache
+.DS_Store
+
+# Local secrets and hosting metadata (keep only blank examples)
+.env.*
+!.env.example
+.vercel/
+.render/
+*.pem
+*.key
+
+# Generated output and local agent scratch space
+*.log
+*.tsbuildinfo
+.superpowers/
+docs/evidence/

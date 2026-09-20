@@ -1,0 +1,529 @@
+{
+  "baseline": "34d68dbbb3f15d5c68a00975021478a15ce9c0b6",
+  "actor": "guest",
+  "packets": [
+    [
+      "join_success",
+      {
+        "playerId": "fixture-player-1",
+        "reconnectToken": "fixture-reconnect-token",
+        "roomCode": "ABCD",
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ],
+        "winningScore": 20,
+        "psychicTimerEnabled": false,
+        "roomLocked": false,
+        "selectedPackIds": ["core", "daily-life", "entertainment"],
+        "gameMode": "individual",
+        "teamCount": 2,
+        "teams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ],
+        "isOwner": false
+      }
+    ],
+    [
+      "player_joined",
+      {
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ]
+      }
+    ],
+    [
+      "game_started",
+      {
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ],
+        "winningScore": 20,
+        "selectedPackIds": ["core", "daily-life", "entertainment"],
+        "gameMode": "individual",
+        "teamCount": 2,
+        "teams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ]
+      }
+    ],
+    [
+      "round_start",
+      {
+        "roundNumber": 1,
+        "psychicId": "fixture-player-2",
+        "card": {
+          "id": "daily-life-37",
+          "packId": "daily-life",
+          "left": "مناسب لكل يوم",
+          "right": "لمناسبة خاصة"
+        },
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 0,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ],
+        "gameMode": "individual",
+        "teamCount": 2,
+        "teams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ],
+        "activeTeamId": null,
+        "controllerId": null
+      }
+    ],
+    [
+      "clue_broadcast",
+      {
+        "clue": "تلميح متوافق",
+        "psychicName": "مضيف التوافق"
+      }
+    ],
+    [
+      "player_guessed",
+      {
+        "playerId": "fixture-player-2",
+        "allSubmitted": false
+      }
+    ],
+    [
+      "timer_start",
+      {
+        "endsAt": 1789389154104,
+        "phase": "guessing",
+        "roundNumber": 1
+      }
+    ],
+    [
+      "guess_accepted",
+      {
+        "roundNumber": 1,
+        "angle": 74
+      }
+    ],
+    [
+      "player_guessed",
+      {
+        "playerId": "fixture-player-1",
+        "teamId": null,
+        "allSubmitted": true
+      }
+    ],
+    [
+      "round_ready_updated",
+      {
+        "playerIds": [],
+        "readyCount": 0,
+        "requiredCount": 2,
+        "endsAt": 1789389106420,
+        "paused": false,
+        "remainingMs": null
+      }
+    ],
+    [
+      "reveal_phase",
+      {
+        "targetAngle": 74.39446631546215,
+        "guesses": [
+          {
+            "playerId": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "angle": 74,
+            "points": 3
+          }
+        ],
+        "psychicPoints": 4,
+        "psychicBreakdown": {
+          "averagePoints": 3,
+          "twoPlayerBonus": 1,
+          "bullseyeBonus": 0,
+          "allMissPenalty": false
+        },
+        "updatedScores": [
+          {
+            "playerId": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "totalScore": 4
+          },
+          {
+            "playerId": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "totalScore": 3
+          }
+        ],
+        "updatedTeams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ],
+        "gameMode": "individual",
+        "activeTeamId": null,
+        "shouldPromptRating": false,
+        "winner": null,
+        "winners": [],
+        "readyState": {
+          "playerIds": [],
+          "readyCount": 0,
+          "requiredCount": 2,
+          "endsAt": 1789389106420,
+          "paused": false,
+          "remainingMs": null
+        }
+      }
+    ],
+    [
+      "round_ready_updated",
+      {
+        "playerIds": [],
+        "readyCount": 0,
+        "requiredCount": 2,
+        "endsAt": null,
+        "paused": true,
+        "remainingMs": 11950
+      }
+    ],
+    [
+      "reconnect_success",
+      {
+        "playerId": "fixture-player-1",
+        "displayName": "ضيف التوافق",
+        "isOwner": false,
+        "roomCode": "ABCD",
+        "status": "playing",
+        "winningScore": 20,
+        "psychicTimerEnabled": false,
+        "roomLocked": false,
+        "selectedPackIds": ["core", "daily-life", "entertainment"],
+        "gameMode": "individual",
+        "teamCount": 2,
+        "teams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ],
+        "readyState": {
+          "playerIds": [],
+          "readyCount": 0,
+          "requiredCount": 2,
+          "endsAt": null,
+          "paused": true,
+          "remainingMs": 11950
+        },
+        "rematchState": {
+          "playerIds": [],
+          "voteCount": 0,
+          "requiredCount": 2
+        },
+        "awaitingNextRound": false,
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 4,
+            "isConnected": true,
+            "hasSubmitted": true,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 3,
+            "isConnected": true,
+            "hasSubmitted": true,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ],
+        "currentRound": {
+          "roundNumber": 1,
+          "psychicId": "fixture-player-2",
+          "card": {
+            "id": "daily-life-37",
+            "packId": "daily-life",
+            "left": "مناسب لكل يوم",
+            "right": "لمناسبة خاصة"
+          },
+          "clue": "تلميح متوافق",
+          "status": "revealed",
+          "timerEndsAt": null,
+          "timerPhase": null,
+          "hasSubmitted": true,
+          "hasRated": false,
+          "myRatingVote": null,
+          "activeTeamId": null,
+          "controllerId": null,
+          "shouldPromptRating": false,
+          "myGuessAngle": 74,
+          "revealData": {
+            "targetAngle": 74.39446631546215,
+            "guesses": [
+              {
+                "playerId": "fixture-player-1",
+                "displayName": "ضيف التوافق",
+                "angle": 74,
+                "points": 3
+              }
+            ],
+            "psychicPoints": 4,
+            "psychicBreakdown": {
+              "averagePoints": 3,
+              "twoPlayerBonus": 1,
+              "bullseyeBonus": 0,
+              "allMissPenalty": false
+            },
+            "updatedScores": [
+              {
+                "playerId": "fixture-player-2",
+                "displayName": "مضيف التوافق",
+                "totalScore": 4
+              },
+              {
+                "playerId": "fixture-player-1",
+                "displayName": "ضيف التوافق",
+                "totalScore": 3
+              }
+            ],
+            "updatedTeams": [
+              {
+                "id": "team-1",
+                "name": "الفريق ١",
+                "color": "#6C5CE7",
+                "score": 0
+              },
+              {
+                "id": "team-2",
+                "name": "الفريق ٢",
+                "color": "#00B894",
+                "score": 0
+              }
+            ],
+            "gameMode": "individual",
+            "activeTeamId": null,
+            "shouldPromptRating": false,
+            "winner": null,
+            "winners": [],
+            "readyState": {
+              "playerIds": [],
+              "readyCount": 0,
+              "requiredCount": 2,
+              "endsAt": 1789389106420,
+              "paused": false,
+              "remainingMs": null
+            }
+          }
+        },
+        "finalState": null
+      }
+    ],
+    [
+      "player_joined",
+      {
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 4,
+            "isConnected": true,
+            "hasSubmitted": true,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 3,
+            "isConnected": true,
+            "hasSubmitted": true,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ]
+      }
+    ],
+    [
+      "round_ready_updated",
+      {
+        "playerIds": [],
+        "readyCount": 0,
+        "requiredCount": 2,
+        "endsAt": 1789389106701,
+        "paused": false,
+        "remainingMs": null
+      }
+    ],
+    [
+      "round_start",
+      {
+        "roundNumber": 2,
+        "psychicId": "fixture-player-1",
+        "card": {
+          "id": "core-32",
+          "packId": "core",
+          "left": "بلا مخاطرة",
+          "right": "مغامرة كبيرة"
+        },
+        "players": [
+          {
+            "id": "fixture-player-2",
+            "displayName": "مضيف التوافق",
+            "score": 4,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          },
+          {
+            "id": "fixture-player-1",
+            "displayName": "ضيف التوافق",
+            "score": 3,
+            "isConnected": true,
+            "hasSubmitted": false,
+            "awaitingNextRound": false,
+            "teamId": null
+          }
+        ],
+        "gameMode": "individual",
+        "teamCount": 2,
+        "teams": [
+          {
+            "id": "team-1",
+            "name": "الفريق ١",
+            "color": "#6C5CE7",
+            "score": 0
+          },
+          {
+            "id": "team-2",
+            "name": "الفريق ٢",
+            "color": "#00B894",
+            "score": 0
+          }
+        ],
+        "activeTeamId": null,
+        "controllerId": null
+      }
+    ],
+    [
+      "target_reveal",
+      {
+        "targetAngle": 47.37206631832757
+      }
+    ]
+  ]
+}

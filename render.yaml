@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: hint-game-server
+    runtime: node
+    plan: free
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: node scripts/orchestrate.mjs deploy:render
+    startCommand: node server/dist/index.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: POSTHOG_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        value: https://us.i.posthog.com
+      - key: SENTRY_DSN
+        sync: false
+# Set ALLOWED_ORIGINS in the Render dashboard to the exact Vercel URL(s),
+# comma-separated and without trailing slashes. Example:
+# https://your-stable-game-domain.example,https://www.example.com

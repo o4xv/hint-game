@@ -1,0 +1,15 @@
+{
+  "name": "hint-e2e",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.54.1"
+  }
+}

@@ -1,0 +1,14 @@
+# Keep every text file LF both in the repository and in working trees on every
+# platform. Prettier is configured with endOfLine: "lf", so a Windows checkout
+# using npm's default core.autocrlf=true would otherwise fail `npm run format:check`.
+* text=auto eol=lf
+
+# Never normalize binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp3 binary
+*.woff binary
+*.woff2 binary

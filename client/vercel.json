@@ -1,0 +1,18 @@
+{
+  "installCommand": "node ../scripts/orchestrate.mjs install:vercel",
+  "buildCommand": "node ../scripts/orchestrate.mjs build:client",
+  "headers": [
+    {
+      "source": "/service-worker.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ],
+  "rewrites": [
+    { "source": "/room/:code", "destination": "/index.html" },
+    { "source": "/watch/:code", "destination": "/index.html" }
+  ]
+}

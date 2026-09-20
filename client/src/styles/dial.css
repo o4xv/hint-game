@@ -1,0 +1,197 @@
+/* ═══════════════════════════════════════════════════
+   هنت  —  Dial Styles  (UI/UX Spec §5)
+   ═══════════════════════════════════════════════════ */
+
+.dial-svg {
+  display: block;
+  max-width: 380px;
+  min-width: 280px;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dial-svg.interactive {
+  border-radius: 18px;
+  outline: none;
+}
+
+.dial-svg.interactive:not(.has-interacted) .dial-handle-aura {
+  animation: handlePulse 1.5s var(--ease-out) infinite;
+}
+
+.dial-svg.is-locked .dial-handle-core {
+  stroke: var(--color-yellow);
+  stroke-width: 4px;
+  filter: drop-shadow(0 0 5px rgba(255, 230, 109, 0.65));
+}
+
+.dial-svg.is-locked .dial-handle-aura {
+  fill: rgba(0, 184, 148, 0.2);
+  stroke: var(--status-success);
+}
+
+.dial-svg.is-locked .dial-needle-line {
+  stroke-width: 5px;
+}
+
+.dial-svg.is-waiting {
+  animation: dialWaiting 1.5s var(--ease-out) infinite;
+}
+
+.dial-needle-handle circle {
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.18));
+}
+
+.dial-handle-aura {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.dial-svg.is-dragging .dial-handle-aura {
+  fill: rgba(255, 230, 109, 0.38);
+  stroke-width: 4px;
+}
+
+.dial-svg.is-dragging .dial-handle-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(1.08);
+}
+
+.reveal-needle {
+  transform-origin: center;
+  animation: needleSweep 420ms var(--ease-out) both;
+}
+
+@keyframes dialWaiting {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes handlePulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    stroke-width: 3px;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 5px;
+  }
+}
+
+@keyframes needleSweep {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dial-svg.interactive:focus-visible {
+  outline: none;
+}
+
+.dial-svg.interactive:focus-visible .dial-handle-aura {
+  stroke-width: 6px;
+  filter: drop-shadow(0 0 5px rgba(255, 230, 109, 0.8));
+}
+
+.dial-svg g {
+  pointer-events: none;
+}
+
+/* Prevent text selection during dial drag */
+.dial-svg * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Needle transition for non-drag updates */
+.dial-needle-line {
+  transition:
+    x2 0.1s ease,
+    y2 0.1s ease;
+}
+
+.dial-needle-shadow {
+  transition:
+    x2 0.1s ease,
+    y2 0.1s ease;
+}
+
+.dial-needle-handle {
+  transition:
+    cx 0.1s ease,
+    cy 0.1s ease;
+}
+
+.dial-needle-handle circle {
+  transition:
+    cx 0.1s ease,
+    cy 0.1s ease;
+}
+
+/* Dragging: remove transitions for instant response */
+.dial-svg:active .dial-needle-line,
+.dial-svg:active .dial-needle-shadow,
+.dial-svg:active .dial-needle-handle,
+.dial-svg:active .dial-needle-handle circle {
+  transition: none;
+}
+
+/* Glow effect for current user's needle */
+.dial-needle-current {
+  filter: drop-shadow(0 0 6px rgba(255, 230, 109, 0.6));
+}
+
+/* Zone labels (point numbers) */
+.dial-zone-label {
+  pointer-events: none;
+  text-rendering: optimizeLegibility;
+}
+
+/* Dial section labels (left/right spectrum labels) */
+.dial-label {
+  font-family: var(--font-family);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+  fill: var(--color-white);
+}
+
+.dial-label-left {
+  text-anchor: start;
+}
+
+.dial-label-right {
+  text-anchor: end;
+}
+
+/* Responsive scaling */
+@media (max-width: 400px) {
+  .dial-svg {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dial-svg.is-waiting,
+  .dial-handle-aura,
+  .reveal-needle {
+    animation: none;
+  }
+}

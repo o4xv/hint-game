@@ -1,0 +1,36 @@
+{
+  "name": "hint-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "npm@11.8.0",
+  "scripts": {
+    "install:all": "node scripts/orchestrate.mjs install:all",
+    "install:vercel": "node scripts/orchestrate.mjs install:vercel",
+    "dev": "node scripts/orchestrate.mjs dev",
+    "lint": "node scripts/orchestrate.mjs lint",
+    "lint:code": "eslint .",
+    "typecheck": "node scripts/orchestrate.mjs typecheck",
+    "test": "node scripts/orchestrate.mjs test",
+    "test:tooling": "node --test scripts/orchestrate.test.mjs",
+    "test:e2e": "node scripts/orchestrate.mjs test:e2e",
+    "build": "node scripts/orchestrate.mjs build",
+    "build:client": "node scripts/orchestrate.mjs build:client",
+    "deploy:render": "node scripts/orchestrate.mjs deploy:render",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

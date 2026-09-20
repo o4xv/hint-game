@@ -1,0 +1,192 @@
+{
+  "snapshotVersion": 1,
+  "savedAt": 1700000000000,
+  "code": "V1FN",
+  "ownerId": "owner",
+  "status": "finished",
+  "winningScore": 10,
+  "psychicTimerEnabled": false,
+  "roomLocked": false,
+  "selectedPackIds": ["core", "daily-life", "entertainment"],
+  "lastActivity": 1700000000000,
+  "players": [
+    {
+      "id": "owner",
+      "displayName": "Owner",
+      "score": 10,
+      "isConnected": false,
+      "hasSubmitted": true,
+      "awaitingNextRound": false,
+      "reconnectToken": "fixture-owner-token"
+    },
+    {
+      "id": "guest",
+      "displayName": "Guest",
+      "score": 8,
+      "isConnected": false,
+      "hasSubmitted": true,
+      "awaitingNextRound": false,
+      "reconnectToken": "fixture-guest-token"
+    }
+  ],
+  "currentRound": {
+    "roundNumber": 1,
+    "psychicId": "owner",
+    "card": {
+      "id": "core-1",
+      "packId": "core",
+      "left": "غير مهم",
+      "right": "مهم جداً"
+    },
+    "targetAngle": 90,
+    "clue": "اختبار",
+    "status": "revealed",
+    "guesses": [
+      {
+        "playerId": "guest",
+        "angle": 90,
+        "points": 3
+      }
+    ],
+    "usedCardIds": ["core-1"],
+    "psychicOrder": ["owner", "guest"],
+    "psychicIndex": 1,
+    "pausedPsychicTimerRemaining": null,
+    "revealData": {
+      "targetAngle": 90,
+      "guesses": [
+        {
+          "playerId": "guest",
+          "displayName": "Guest",
+          "angle": 90,
+          "points": 3
+        }
+      ],
+      "psychicPoints": 4,
+      "updatedScores": [
+        {
+          "playerId": "owner",
+          "displayName": "Owner",
+          "totalScore": 10
+        },
+        {
+          "playerId": "guest",
+          "displayName": "Guest",
+          "totalScore": 8
+        }
+      ],
+      "winner": {
+        "playerId": "owner",
+        "displayName": "Owner",
+        "score": 10
+      },
+      "awards": [
+        {
+          "type": "closest_guess",
+          "title": "أقرب تخمين",
+          "playerIds": ["guest"],
+          "value": 0,
+          "players": [
+            {
+              "playerId": "guest",
+              "displayName": "Guest"
+            }
+          ]
+        },
+        {
+          "type": "largest_miss",
+          "title": "أبعد محاولة",
+          "playerIds": ["guest"],
+          "value": 0,
+          "players": [
+            {
+              "playerId": "guest",
+              "displayName": "Guest"
+            }
+          ]
+        }
+      ],
+      "matchRoundCount": 1
+    },
+    "ratings": [
+      {
+        "playerId": "guest",
+        "vote": "up"
+      }
+    ]
+  },
+  "timerDescriptor": null,
+  "matchHistory": [
+    {
+      "roundNumber": 1,
+      "cardId": "core-1",
+      "packId": "core",
+      "psychicId": "owner",
+      "psychicPoints": 4,
+      "guesses": [
+        {
+          "playerId": "guest",
+          "angle": 90,
+          "points": 3,
+          "distance": 0
+        }
+      ]
+    }
+  ],
+  "finalState": {
+    "targetAngle": 90,
+    "guesses": [
+      {
+        "playerId": "guest",
+        "displayName": "Guest",
+        "angle": 90,
+        "points": 3
+      }
+    ],
+    "psychicPoints": 4,
+    "updatedScores": [
+      {
+        "playerId": "owner",
+        "displayName": "Owner",
+        "totalScore": 10
+      },
+      {
+        "playerId": "guest",
+        "displayName": "Guest",
+        "totalScore": 8
+      }
+    ],
+    "winner": {
+      "playerId": "owner",
+      "displayName": "Owner",
+      "score": 10
+    },
+    "awards": [
+      {
+        "type": "closest_guess",
+        "title": "أقرب تخمين",
+        "playerIds": ["guest"],
+        "value": 0,
+        "players": [
+          {
+            "playerId": "guest",
+            "displayName": "Guest"
+          }
+        ]
+      },
+      {
+        "type": "largest_miss",
+        "title": "أبعد محاولة",
+        "playerIds": ["guest"],
+        "value": 0,
+        "players": [
+          {
+            "playerId": "guest",
+            "displayName": "Guest"
+          }
+        ]
+      }
+    ],
+    "matchRoundCount": 1
+  }
+}
