@@ -8,82 +8,95 @@ const require = createRequire(new URL("../e2e/package.json", import.meta.url));
 const { chromium } = require("@playwright/test");
 const assets = new URL("../client/public/assets/", import.meta.url);
 const source = await readFile(new URL("logo.png", assets));
+const mark = await readFile(new URL("brand-mark.svg", assets));
+// Version the in-app URL alongside the platform icons to avoid stale artwork.
+await writeFile(new URL("logo-v4.png", assets), source);
 const browser = await chromium.launch();
 let exports;
 try {
   const page = await browser.newPage();
-  exports = await page.evaluate(async (data) => {
-    const logo = new Image();
-    logo.src = `data:image/png;base64,${data}`;
-    await logo.decode();
-    const sourceCanvas = document.createElement("canvas");
-    sourceCanvas.width = logo.naturalWidth;
-    sourceCanvas.height = logo.naturalHeight;
-    const sourceContext = sourceCanvas.getContext("2d");
-    sourceContext.drawImage(logo, 0, 0);
-    const pixels = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
-    let left = sourceCanvas.width;
-    let top = sourceCanvas.height;
-    let right = 0;
-    let bottom = 0;
-    for (let y = 0; y < sourceCanvas.height; y++) {
-      for (let x = 0; x < sourceCanvas.width; x++) {
-        if (pixels[(y * sourceCanvas.width + x) * 4 + 3] === 0) continue;
-        left = Math.min(left, x);
-        top = Math.min(top, y);
-        right = Math.max(right, x);
-        bottom = Math.max(bottom, y);
+  exports = await page.evaluate(
+    async (data) => {
+      const logo = new Image();
+      logo.src = `data:image/png;base64,${data.logo}`;
+      await logo.decode();
+      const symbol = new Image();
+      symbol.src = `data:image/svg+xml;base64,${data.mark}`;
+      await symbol.decode();
+      const sourceCanvas = document.createElement("canvas");
+      sourceCanvas.width = logo.naturalWidth;
+      sourceCanvas.height = logo.naturalHeight;
+      const sourceContext = sourceCanvas.getContext("2d");
+      sourceContext.drawImage(logo, 0, 0);
+      const pixels = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
+      let left = sourceCanvas.width;
+      let top = sourceCanvas.height;
+      let right = 0;
+      let bottom = 0;
+      for (let y = 0; y < sourceCanvas.height; y++) {
+        for (let x = 0; x < sourceCanvas.width; x++) {
+          if (pixels[(y * sourceCanvas.width + x) * 4 + 3] === 0) continue;
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
+        }
       }
-    }
-    const width = right - left + 1;
-    const height = bottom - top + 1;
-    const cx = (left + right + 1) / 2;
-    const cy = (top + bottom + 1) / 2;
-    let radius = 0;
-    for (let y = top; y <= bottom; y++) {
-      for (let x = left; x <= right; x++) {
-        if (pixels[(y * sourceCanvas.width + x) * 4 + 3] === 0) continue;
-        radius = Math.max(radius, Math.hypot(x + 0.5 - cx, y + 0.5 - cy));
+      const width = right - left + 1;
+      const height = bottom - top + 1;
+      const cx = (left + right + 1) / 2;
+      const cy = (top + bottom + 1) / 2;
+      let radius = 0;
+      for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) {
+          if (pixels[(y * sourceCanvas.width + x) * 4 + 3] === 0) continue;
+          radius = Math.max(radius, Math.hypot(x + 0.5 - cx, y + 0.5 - cy));
+        }
       }
-    }
-    const variants = [
-      ["favicon-16-v3.png", 16, "transparent"],
-      ["favicon-32-v3.png", 32, "transparent"],
-      ["favicon-48-v3.png", 48, "transparent"],
-      ["apple-touch-icon-v3.png", 180, "opaque"],
-      ["icon-192-v3.png", 192, "opaque"],
-      ["icon-512-v3.png", 512, "opaque"],
-      ["icon-maskable-512-v3.png", 512, "maskable"],
-    ];
-    return variants.map(([name, size, kind]) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = size;
-      const context = canvas.getContext("2d");
-      if (kind !== "transparent") {
-        context.fillStyle = "#1a1a2e";
-        context.fillRect(0, 0, size, size);
-      }
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
-      // Maskable artwork fits inside the 40% safe radius, with room for filtering.
-      const scale =
-        kind === "maskable"
-          ? (size * 0.39) / radius
-          : (size * (kind === "transparent" ? 0.94 : 0.84)) / Math.max(width, height);
-      context.drawImage(
-        logo,
-        left,
-        top,
-        width,
-        height,
-        (size - width * scale) / 2,
-        (size - height * scale) / 2,
-        width * scale,
-        height * scale,
-      );
-      return { name, size, png: canvas.toDataURL("image/png").split(",")[1] };
-    });
-  }, source.toString("base64"));
+      const variants = [
+        ["favicon-16-v4.png", 16, "transparent"],
+        ["favicon-32-v4.png", 32, "transparent"],
+        ["favicon-48-v4.png", 48, "transparent"],
+        ["apple-touch-icon-v4.png", 180, "opaque"],
+        ["icon-192-v4.png", 192, "opaque"],
+        ["icon-512-v4.png", 512, "opaque"],
+        ["icon-maskable-512-v4.png", 512, "maskable"],
+      ];
+      return variants.map(([name, size, kind]) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        const context = canvas.getContext("2d");
+        if (kind !== "transparent") {
+          context.fillStyle = "#1a1a2e";
+          context.fillRect(0, 0, size, size);
+        }
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        // Maskable artwork fits inside the 40% safe radius, with room for filtering.
+        const scale =
+          kind === "maskable"
+            ? (size * 0.39) / radius
+            : (size * (kind === "transparent" ? 0.94 : 0.84)) / Math.max(width, height);
+        if (kind === "transparent") {
+          // At browser-tab sizes, use the dial alone instead of unreadable lettering.
+          context.drawImage(symbol, size * 0.03, size * 0.1475, size * 0.94, size * 0.705);
+        } else
+          context.drawImage(
+            logo,
+            left,
+            top,
+            width,
+            height,
+            (size - width * scale) / 2,
+            (size - height * scale) / 2,
+            width * scale,
+            height * scale,
+          );
+        return { name, size, png: canvas.toDataURL("image/png").split(",")[1] };
+      });
+    },
+    { logo: source.toString("base64"), mark: mark.toString("base64") },
+  );
 } finally {
   await browser.close();
 }

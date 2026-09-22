@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">
+  <title>هنت</title>
+  <path d="M4 38 A28 28 0 0 1 60 38 Z" fill="#FFF8E9"/>
+  <path d="M32 38 L28.103 10.272 A28 28 0 0 1 35.897 10.272 Z" fill="#6952D9"/>
+  <path d="M32 38 L35.897 10.272 A28 28 0 0 1 43.389 12.421 Z" fill="#FFDC62"/>
+  <path d="M32 38 L43.389 12.421 A28 28 0 0 1 49.998 16.551 Z" fill="#FF7774"/>
+  <path d="M32 38 L49.998 16.551 A28 28 0 0 1 55.213 22.343 Z" fill="#FFDC62"/>
+  <path d="M32 38 L55.213 22.343 A28 28 0 0 1 58.630 29.348 Z" fill="#6952D9"/>
+  <path d="M4 38 A28 28 0 0 1 60 38 Z" fill="none" stroke="#20203D" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M4 38 A28 28 0 0 1 60 38 Z" fill="none" stroke="#6952D9" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M32 38 L44 18" stroke="#20203D" stroke-width="7" stroke-linecap="round"/>
+  <path d="M32 38 L44 18" stroke="#FFF8E9" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="32" cy="38" r="4.5" fill="#FFF8E9" stroke="#20203D" stroke-width="2"/>
+</svg>
