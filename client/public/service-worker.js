@@ -5,15 +5,15 @@ const CACHE_NAME = "hint-runtime-__BUILD_ID__";
 const APP_SHELL = [
   "/offline.html",
   "/manifest.json",
-  "/assets/icon-192-v3.png",
-  "/assets/icon-512-v3.png",
-  "/assets/icon-maskable-512-v3.png",
-  "/assets/apple-touch-icon-v3.png",
-  "/assets/favicon-16-v3.png",
-  "/assets/favicon-32-v3.png",
-  "/assets/favicon-48-v3.png",
-  "/favicon.ico?v=3",
-  "/assets/logo.png",
+  "/assets/icon-192-v4.png",
+  "/assets/icon-512-v4.png",
+  "/assets/icon-maskable-512-v4.png",
+  "/assets/apple-touch-icon-v4.png",
+  "/assets/favicon-16-v4.png",
+  "/assets/favicon-32-v4.png",
+  "/assets/favicon-48-v4.png",
+  "/favicon.ico?v=4",
+  "/assets/logo-v4.png",
 ];
 
 async function precacheAppShell() {

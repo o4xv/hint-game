@@ -16,7 +16,7 @@
   display: block;
   width: min(100%, 320px);
   aspect-ratio: 1;
-  background: url("/assets/logo.png?v=2") center / contain no-repeat;
+  background: url("/assets/logo-v4.png") center / contain no-repeat;
   pointer-events: none;
   user-select: none;
   -webkit-touch-callout: none;
