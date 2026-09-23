@@ -1,5 +1,5 @@
 import { RoomTimerScheduler } from "./timerScheduler.js";
-import type { ReconnectSnapshot, RedrawReason } from "@hint/contracts";
+import type { ReconnectSnapshot, RedrawReason, TargetRedrawState } from "@hint/contracts";
 import type {
   JoinRequest,
   PersistenceAdapter,
@@ -124,7 +124,10 @@ export function createRoom(
       previewAngle: null,
       shouldPromptRating: false,
       redrawUsed: false,
+      targetRevision: 0,
     },
+    targetRedrawsUsedByPlayer: {},
+    targetRedrawsUsedByTeam: {},
     timer: null,
     timerEndsAt: null,
     timerDescriptor: null,
@@ -303,6 +306,8 @@ export function resetRoundState(room: Room) {
   room.currentRound.previewAngle = null;
   room.currentRound.shouldPromptRating = false;
   room.currentRound.redrawUsed = false;
+  // The next turn gets its own single position change; match allowances belong to the room.
+  room.currentRound.targetRevision = 0;
   room.roundReadyPlayerIds = [];
   room.roundAdvanceEndsAt = null;
   room.roundAdvancePausedRemainingMs = null;
@@ -471,7 +476,12 @@ export function getReconnectState(
   {
     redrawAvailable = false,
     redrawReason = null,
-  }: { redrawAvailable?: boolean; redrawReason?: RedrawReason | null } = {},
+    targetRedraw = null,
+  }: {
+    redrawAvailable?: boolean;
+    redrawReason?: RedrawReason | null;
+    targetRedraw?: TargetRedrawState | null;
+  } = {},
 ): ReconnectSnapshot {
   touchActivity(room);
   const player = getPlayer(room, playerId);
@@ -526,6 +536,7 @@ export function getReconnectState(
             redrawUsed: room.currentRound.redrawUsed,
             redrawAvailable,
             redrawReason,
+            ...(targetRedraw ? { targetRedraw } : {}),
             myGuessAngle: submittedGuess?.angle ?? null,
             revealData:
               room.currentRound.status === "revealed" ? room.currentRound.revealData : null,

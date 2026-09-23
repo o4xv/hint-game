@@ -52,6 +52,9 @@ export function setupMatchService(io: GameIO, socket: GameSocket) {
 
     room.matchStartedAt = Date.now();
     room.roundStartedAt = null;
+    // A new match starts every player and team with a full allowance.
+    room.targetRedrawsUsedByPlayer = {};
+    room.targetRedrawsUsedByTeam = {};
     updateRoomStatus(room, "playing");
 
     io.to(roomCode).emit("game_started", {
@@ -98,6 +101,9 @@ export function setupMatchService(io: GameIO, socket: GameSocket) {
     room.currentRound.controllerId = null;
     room.currentRound.shouldPromptRating = false;
     room.currentRound.redrawUsed = false;
+    room.currentRound.targetRevision = 0;
+    room.targetRedrawsUsedByPlayer = {};
+    room.targetRedrawsUsedByTeam = {};
     room.roundReadyPlayerIds = [];
     room.roundAdvanceEndsAt = null;
     room.roundAdvancePausedRemainingMs = null;

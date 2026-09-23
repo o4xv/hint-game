@@ -39,6 +39,7 @@ import { TIMEOUTS } from "../config/gameConfig.js";
 import { DEFAULT_PACK_IDS, validatePackIds } from "../data/cards.js";
 import { trackGameplay } from "../telemetry.js";
 import { emitPlayers, roomCardRedrawStatus } from "./capabilities.js";
+import { targetRedrawState } from "./targetRedraw.js";
 
 const rateLimiters = new Map<string, number>();
 const roomCreationWindows = new WeakMap<GameIO, Map<string, number[]>>();
@@ -454,6 +455,7 @@ export function setupMembershipService(io: GameIO, socket: GameSocket) {
     const reconnectState = getReconnectState(room, player.id, {
       redrawAvailable: reconnectRedraw.available,
       redrawReason: reconnectRedraw.reason,
+      targetRedraw: targetRedrawState(room),
     });
 
     socket.emit("reconnect_success", {
@@ -512,6 +514,7 @@ export function setupMembershipService(io: GameIO, socket: GameSocket) {
           redrawUsed: room.currentRound.redrawUsed,
           redrawAvailable: spectatorRedraw.available,
           redrawReason: spectatorRedraw.reason,
+          targetRedraw: targetRedrawState(room),
           revealData:
             room.currentRound.status === "revealed" || room.status === "finished"
               ? room.currentRound.revealData && { ...room.currentRound.revealData, readyState }

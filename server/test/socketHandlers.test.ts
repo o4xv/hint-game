@@ -13,7 +13,7 @@ import {
 import { createGameServer } from "../index.js";
 import { createRoom, getAllRooms, deleteRoom } from "../roomManager.js";
 import { getTargetRegion } from "../gameEngine.js";
-import { startGuessTimer } from "../socketHandlers/roundLogic.js";
+import { advanceExpiredPsychicTurn, startGuessTimer } from "../socketHandlers/roundLogic.js";
 
 async function createFixture() {
   const gameServer = createGameServer({ startCleanup: false });
@@ -1570,7 +1570,9 @@ void test("an expired controller disconnect cannot advance a newer team round", 
   await disconnected;
 
   const nextRound = onceWhere(fixture.owner, "round_start", (data) => data.roundNumber === 2);
-  required(psychic).socket.emit("skip_round", { roomCode: fixture.ownerData.roomCode });
+  // Voluntary skipping is gone, so the turn only ends through the automatic timeout path.
+  const live = required(getRoom(fixture.ownerData.roomCode));
+  assert.equal(advanceExpiredPsychicTurn(fixture.gameServer.io, live, required(psychic).id), true);
   await nextRound;
   await new Promise((resolve) => setTimeout(resolve, 330));
 

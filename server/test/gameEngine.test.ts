@@ -11,6 +11,7 @@ import {
   generateTargetAngle,
   getTargetRegion,
   calculateAwards,
+  generateReplacementTargetAngle,
 } from "../gameEngine.js";
 import { cards, publicCards, publicPacks, validatePackIds } from "../data/cards.js";
 import { getRecoveryDelay } from "../socketHandlers/roundLogic.js";
@@ -168,4 +169,83 @@ void test("calculates tied awards and requires two rounds for averages", () => {
 void test("restored expired timers receive at least fifteen seconds", () => {
   assert.equal(getRecoveryDelay(1_000, 2_000), 15_000);
   assert.equal(getRecoveryDelay(25_000, 2_000), 23_000);
+});
+
+void test("a replacement target stays in range and at least 45 degrees away", () => {
+  for (const previous of [0, 6, 51, 90, 129, 174, 180]) {
+    for (const draw of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 0.999999, 1]) {
+      const angle = generateReplacementTargetAngle(previous, () => draw);
+      assert.ok(Number.isFinite(angle), `${previous} with draw ${draw}`);
+      assert.ok(angle >= 6 - Number.EPSILON * 180, `>= 6: ${angle}`);
+      assert.ok(angle <= 174 + Number.EPSILON * 180, `<= 174: ${angle}`);
+      assert.ok(
+        Math.abs(angle - previous) >= 45 - Number.EPSILON * 180,
+        `${previous} -> ${angle} keeps the separation`,
+      );
+    }
+  }
+});
+
+void test("a replacement samples both sides by their combined length", () => {
+  const closeTo = (value: number, expected: number, label: string) => {
+    assert.ok(Math.abs(value - expected) < 1e-9, `${label}: ${value} ~ ${expected}`);
+  };
+  // A 90-degree target leaves two 39-degree intervals, so the halfway draw is the boundary.
+  assert.equal(
+    generateReplacementTargetAngle(90, () => 0),
+    6,
+  );
+  closeTo(
+    generateReplacementTargetAngle(90, () => 0.5 - Number.EPSILON),
+    45,
+    "left edge",
+  );
+  assert.equal(
+    generateReplacementTargetAngle(90, () => 0.5),
+    135,
+  );
+  closeTo(
+    generateReplacementTargetAngle(90, () => 1),
+    174,
+    "right edge",
+  );
+
+  // Targets near the edges leave one long side: the draw maps onto that interval alone.
+  assert.equal(
+    generateReplacementTargetAngle(6, () => 0),
+    51,
+  );
+  assert.equal(
+    generateReplacementTargetAngle(174, () => 0),
+    6,
+  );
+  closeTo(
+    generateReplacementTargetAngle(174, () => 1),
+    129,
+    "left side end",
+  );
+  assert.equal(
+    generateReplacementTargetAngle(0, () => 0),
+    45,
+  );
+  closeTo(
+    generateReplacementTargetAngle(180, () => 1),
+    135,
+    "historical edge target",
+  );
+  // A short right-hand side is not given an equal share of the draw.
+  assert.ok(generateReplacementTargetAngle(129, () => 0.999) > 83);
+});
+
+void test("a replacement never retries and rejects impossible previous positions", () => {
+  let draws = 0;
+  generateReplacementTargetAngle(37, () => {
+    draws += 1;
+    return 0.42;
+  });
+  assert.equal(draws, 1, "one uniform draw decides the position");
+
+  for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, -1, 180.5]) {
+    assert.throws(() => generateReplacementTargetAngle(invalid, () => 0), TypeError);
+  }
 });

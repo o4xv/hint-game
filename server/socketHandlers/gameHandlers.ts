@@ -5,8 +5,8 @@ import { getRoom, allPlayersSubmitted, clearRoomTimer, touchActivity } from "../
 import { calculatePoints, getTargetRegion } from "../gameEngine.js";
 import {
   advanceToNextRound,
-  advanceSkippedTurn,
   redrawCurrentCard,
+  redrawTarget,
   setPlayerRoundReady,
   setRoundAdvancePaused,
   triggerReveal,
@@ -16,7 +16,9 @@ import {
   cardContextIssue,
   roomCardRedrawStatus,
   socketSupportsCardRedraw,
+  socketSupportsTargetRedraw,
 } from "../services/capabilities.js";
+import { targetRevisionIssue } from "../services/targetRedraw.js";
 import { sanitizeClue } from "../validation.js";
 import { recordCardRating } from "../persistence.js";
 import { trackGameplay } from "../telemetry.js";
@@ -45,7 +47,7 @@ setInterval(() => {
 }, 300_000).unref();
 
 export function setupGameHandlers(io: GameIO, socket: GameSocket) {
-  onAction(socket, "clue_submitted", ({ roomCode, clue, cardId }) => {
+  onAction(socket, "clue_submitted", ({ roomCode, clue, cardId, targetRevision }) => {
     roomCode = (roomCode || "").trim().toUpperCase();
     clue = sanitizeClue(clue) ?? "";
 
@@ -59,6 +61,13 @@ export function setupGameHandlers(io: GameIO, socket: GameSocket) {
     });
     if (contextIssue) {
       socket.emit("action_error", { event: "clue_submitted", code: contextIssue });
+      return;
+    }
+    const revisionIssue = targetRevisionIssue(room, targetRevision, {
+      requireContext: socketSupportsTargetRedraw(socket),
+    });
+    if (revisionIssue) {
+      socket.emit("action_error", { event: "clue_submitted", code: revisionIssue });
       return;
     }
 
@@ -84,22 +93,10 @@ export function setupGameHandlers(io: GameIO, socket: GameSocket) {
     startGuessTimer(io, room);
   });
 
-  onAction(socket, "skip_round", ({ roomCode, cardId }) => {
-    roomCode = (roomCode || "").trim().toUpperCase();
-    const room = getRoom(roomCode);
-    if (room?.status !== "playing") return;
-    const contextIssue = cardContextIssue(room, cardId, {
-      requireContext: socketSupportsCardRedraw(socket),
-    });
-    if (contextIssue) {
-      socket.emit("action_error", { event: "skip_round", code: contextIssue });
-      return;
-    }
-    const player = room.players.find((p) => p.socketId === socket.id);
-    if (player?.id !== room.currentRound.psychicId) return;
-    if (room.currentRound.status !== "waiting") return;
-    clearRoomTimer(room);
-    advanceSkippedTurn(io, room, player.id, "skip");
+  // Voluntary skipping was removed from the rules. Older clients that still send it get an
+  // explicit rejection and nothing else happens: no penalty, no timer change, no advance.
+  onAction(socket, "skip_round", () => {
+    socket.emit("action_error", { event: "skip_round", code: "ACTION_REMOVED" });
   });
 
   onAction(socket, "redraw_card", ({ roomCode, cardId }) => {
@@ -118,6 +115,33 @@ export function setupGameHandlers(io: GameIO, socket: GameSocket) {
     });
     if (!result.ok) socket.emit("action_error", { event: "redraw_card", code: result.code });
   });
+
+  // Only the current clue giver may move the answer position, and only its own socket learns
+  // the new angle: everyone else keeps learning the target at the reveal like always.
+  onAction(
+    socket,
+    "redraw_target",
+    ({ roomCode, roundNumber, cardId, targetRevision, requestId }) => {
+      roomCode = (roomCode || "").trim().toUpperCase();
+      const room = getRoom(roomCode);
+      const player = room?.players.find((candidate) => candidate.socketId === socket.id);
+      const result = room
+        ? redrawTarget(room, {
+            playerId: player?.id ?? null,
+            roundNumber,
+            cardId,
+            targetRevision,
+            requestId,
+            supported: socketSupportsTargetRedraw(socket),
+          })
+        : ({ ok: false, code: "ROOM_NOT_PLAYING" } as const);
+      if (result.ok) {
+        socket.emit("target_redrawn", result.payload);
+        return;
+      }
+      socket.emit("action_error", { event: "redraw_target", code: result.code, requestId });
+    },
+  );
 
   onAction(socket, "guess_submitted", ({ roomCode, angle, cardId }) => {
     roomCode = (roomCode || "").trim().toUpperCase();

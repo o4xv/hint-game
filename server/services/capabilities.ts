@@ -9,6 +9,16 @@ export function socketSupportsCardRedraw(socket: GameSocket | undefined): boolea
   return (auth as Record<string, unknown>).cardRedrawV1 === true;
 }
 
+/**
+ * A target change only alters the clue giver's private position, so no other participant
+ * needs to understand it. The requesting client alone has to advertise the capability.
+ */
+export function socketSupportsTargetRedraw(socket: GameSocket | undefined): boolean {
+  const auth: unknown = socket?.handshake.auth;
+  if (!auth || typeof auth !== "object") return false;
+  return (auth as Record<string, unknown>).targetRedrawV1 === true;
+}
+
 export interface CardRedrawStatus {
   available: boolean;
   /** Named only when the server can tell which kind of participant blocks replacement. */

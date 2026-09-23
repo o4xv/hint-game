@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createClient, once, onceWhere, required, roomForTest, type Client } from "./helpers.js";
 import { createGameServer } from "../index.js";
 import { addPlayer, createRoom, deleteRoom, getAllRooms } from "../roomManager.js";
-import { advanceSkippedTurn } from "../socketHandlers/roundLogic.js";
+import { advanceExpiredPsychicTurn } from "../socketHandlers/roundLogic.js";
 import { finishMatch } from "../socketHandlers/matchLifecycle.js";
 import {
   emitPlayers,
@@ -378,45 +378,43 @@ function stubIo() {
   return { io, emitted };
 }
 
-void test("skip and timeout deduct once and advance once in both modes", () => {
-  for (const source of ["skip", "timeout"] as const) {
-    const room = createRoom("SKIP", "owner", "owner-socket", "Owner", 20);
-    try {
-      room.status = "playing";
-      required(room.players[0]).score = 5;
-      addPlayer(room, "mate", "mate-socket", "Mate");
-      const { io, emitted } = stubIo();
-      room.currentRound.roundNumber = 1;
-      room.currentRound.psychicId = "owner";
-      room.currentRound.status = "waiting";
-      room.currentRound.card = { id: "core-1", packId: "core", left: "أ", right: "ب" };
-      room.currentRound.targetAngle = 90;
-      // Deterministic rotation: the next turn belongs to the other player.
-      room.currentRound.psychicOrder = ["owner", "mate"];
-      room.currentRound.psychicIndex = 1;
+void test("an expired psychic turn deducts once, advances once and is announced as a timeout", () => {
+  const room = createRoom("SKIP", "owner", "owner-socket", "Owner", 20);
+  try {
+    room.status = "playing";
+    required(room.players[0]).score = 5;
+    addPlayer(room, "mate", "mate-socket", "Mate");
+    const { io, emitted } = stubIo();
+    room.currentRound.roundNumber = 1;
+    room.currentRound.psychicId = "owner";
+    room.currentRound.status = "waiting";
+    room.currentRound.card = { id: "core-1", packId: "core", left: "أ", right: "ب" };
+    room.currentRound.targetAngle = 90;
+    // Deterministic rotation: the next turn belongs to the other player.
+    room.currentRound.psychicOrder = ["owner", "mate"];
+    room.currentRound.psychicIndex = 1;
 
-      assert.equal(advanceSkippedTurn(io, room, "owner", source), true);
-      assert.equal(required(room.players[0]).score, 4, `${source} deducts one point`);
-      const skipped = emitted.filter((entry) => entry.event === "round_skipped");
-      assert.equal(skipped.length, 1, `${source} announces the skip once`);
-      const payload = required(skipped[0]).data;
-      assert.equal(
-        payload && typeof payload === "object" ? Reflect.get(payload, "source") : null,
-        source,
-      );
-      assert.equal(room.currentRound.roundNumber, 2, `${source} advances the turn once`);
+    assert.equal(advanceExpiredPsychicTurn(io, room, "owner"), true);
+    assert.equal(required(room.players[0]).score, 4, "the timeout deducts one point");
+    const skipped = emitted.filter((entry) => entry.event === "round_skipped");
+    assert.equal(skipped.length, 1, "the timeout is announced once");
+    const payload = required(skipped[0]).data;
+    assert.equal(
+      payload && typeof payload === "object" ? Reflect.get(payload, "source") : null,
+      "timeout",
+    );
+    assert.equal(room.currentRound.roundNumber, 2, "the timeout advances the turn once");
 
-      // A duplicate request (double click, or a skip racing the timer) changes nothing.
-      assert.equal(advanceSkippedTurn(io, room, "owner", source), false);
-      assert.equal(required(room.players[0]).score, 4);
-      assert.equal(emitted.filter((entry) => entry.event === "round_skipped").length, 1);
-    } finally {
-      deleteRoom("SKIP");
-    }
+    // A duplicate callback (the timer firing twice) changes nothing.
+    assert.equal(advanceExpiredPsychicTurn(io, room, "owner"), false);
+    assert.equal(required(room.players[0]).score, 4);
+    assert.equal(emitted.filter((entry) => entry.event === "round_skipped").length, 1);
+  } finally {
+    deleteRoom("SKIP");
   }
 });
 
-void test("a team skip charges the active team, not the psychic", () => {
+void test("a team timeout charges the active team, not the psychic", () => {
   const room = createRoom("TSKP", "owner", "owner-socket", "Owner", 20);
   try {
     room.status = "playing";
@@ -432,7 +430,7 @@ void test("a team skip charges the active team, not the psychic", () => {
     room.currentRound.card = { id: "core-2", packId: "core", left: "أ", right: "ب" };
     room.currentRound.targetAngle = 90;
 
-    assert.equal(advanceSkippedTurn(io, room, "owner", "skip"), true);
+    assert.equal(advanceExpiredPsychicTurn(io, room, "owner"), true);
     assert.equal(required(room.teams[0]).score, 5, "the active team loses the point");
     assert.equal(required(room.players[0]).score, 5, "the psychic keeps their score");
     assert.equal(emitted.filter((entry) => entry.event === "round_skipped").length, 1);

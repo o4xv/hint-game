@@ -26,6 +26,13 @@ const fixtures = {
   clue_submitted: { ...room, clue: "قهوة" },
   skip_round: room,
   redraw_card: { ...room, cardId: "core-1" },
+  redraw_target: {
+    ...room,
+    roundNumber: 1,
+    cardId: "core-1",
+    targetRevision: 0,
+    requestId: "request-1",
+  },
   guess_submitted: { ...room, angle: 90 },
   guess_preview: { ...room, angle: 90, roundNumber: 1 },
   next_round: room,

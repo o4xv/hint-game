@@ -4,6 +4,22 @@ import type { GameSocket } from "../types.js";
 import { getRoom } from "../roomManager.js";
 import { captureException } from "../telemetry.js";
 
+const REQUEST_ID_MAX_LENGTH = 128;
+
+/**
+ * A correlated action cannot trust an unparsed payload, but a request id that already looks
+ * like a bounded identifier is safe to echo so the requesting client can match the rejection
+ * to the action it is waiting on.
+ */
+function extractRequestId(event: IncomingEvent, payload: unknown): string | undefined {
+  if (event !== "redraw_target") return undefined;
+  if (!payload || typeof payload !== "object") return undefined;
+  const value = (payload as Record<string, unknown>).requestId;
+  if (typeof value !== "string" || value.length === 0 || value.length > REQUEST_ID_MAX_LENGTH)
+    return undefined;
+  return value;
+}
+
 /** Socket payloads remain unknown until this event-specific schema succeeds. */
 export function onAction<K extends IncomingEvent>(
   socket: GameSocket,
@@ -16,7 +32,12 @@ export function onAction<K extends IncomingEvent>(
   subscribe(event, (payload: unknown) => {
     const parsed = parseIncoming(event, payload);
     if (!parsed.success) {
-      socket.emit("action_error", { event, code: "INVALID_PAYLOAD" });
+      const requestId = extractRequestId(event, payload);
+      socket.emit("action_error", {
+        event,
+        code: "INVALID_PAYLOAD",
+        ...(requestId ? { requestId } : {}),
+      });
       if (event === "guess_submitted") {
         const context = parseIncoming("watch_room", payload);
         const roundNumber = context.success
@@ -42,7 +63,13 @@ export function onAction<K extends IncomingEvent>(
     if ("roomCode" in data && "roundNumber" in data && data.roundNumber !== undefined) {
       const room = getRoom(data.roomCode);
       if (room && room.currentRound.roundNumber !== data.roundNumber) {
-        socket.emit("action_error", { event, code: "STALE_ROUND" });
+        socket.emit("action_error", {
+          event,
+          code: "STALE_ROUND",
+          ...("requestId" in data && typeof data.requestId === "string"
+            ? { requestId: data.requestId }
+            : {}),
+        });
         return;
       }
     }

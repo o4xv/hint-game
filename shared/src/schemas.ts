@@ -36,6 +36,8 @@ const numeric = z
 const winningScore = numeric.pipe(z.union(WINNING_SCORES.map((value) => z.literal(value))));
 const angle = numeric.pipe(z.number().min(0).max(180));
 const roundNumber = numeric.pipe(z.number().int().min(1).max(Number.MAX_SAFE_INTEGER));
+/** Monotonic per-round target revision; only the current turn's single change is allowed. */
+const targetRevision = numeric.pipe(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER));
 const selectedPackIds = z.array(z.string().min(1).max(64)).min(1).max(32);
 /** Card ids stay opaque; the server compares them with the live round. */
 const cardId = z.string().min(1).max(64);
@@ -72,9 +74,20 @@ export const incomingSchemas = {
   kick_player: player,
   start_game: room,
   watch_room: room,
-  clue_submitted: round.extend({ clue: text, cardId: cardId.optional() }),
+  clue_submitted: round.extend({
+    clue: text,
+    cardId: cardId.optional(),
+    targetRevision: targetRevision.optional(),
+  }),
   skip_round: round.extend({ cardId: cardId.optional() }),
   redraw_card: round.extend({ cardId }),
+  redraw_target: z.object({
+    roomCode,
+    roundNumber,
+    cardId,
+    targetRevision,
+    requestId: identifier,
+  }),
   guess_submitted: round.extend({ angle, cardId: cardId.optional() }),
   guess_preview: room.extend({ angle, roundNumber, cardId: cardId.optional() }),
   next_round: round,

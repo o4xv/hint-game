@@ -1,9 +1,12 @@
 import { z } from "zod";
-import { MAX_PLAYERS } from "@hint/contracts";
+import { MAX_PLAYERS, TARGET_REDRAWS_PER_MATCH } from "@hint/contracts";
 const text = z.string();
 const number = z.number();
 const nullableNumber = number.nullable();
 const strings = z.array(text);
+/** Strict counters: a restored room must not smuggle in negative, fractional or over-limit uses. */
+const targetRedrawCount = z.number().int().min(0).max(TARGET_REDRAWS_PER_MATCH);
+const targetRedrawCounters = z.record(text, targetRedrawCount).default({});
 const mode = z.enum(["individual", "teams"]);
 const team = z.object({ id: text, name: text, color: text, score: number });
 const score = z.object({ playerId: text, displayName: text, totalScore: number });
@@ -90,6 +93,7 @@ const round = z.object({
   previewAngle: nullableNumber.default(null),
   shouldPromptRating: z.boolean().default(false),
   redrawUsed: z.boolean().default(false),
+  targetRevision: z.number().int().min(0).max(1).default(0),
 });
 const player = z.object({
   id: text,
@@ -144,6 +148,8 @@ const modernSnapshotSchema = z.object({
   roundStartedAt: nullableNumber.default(null),
   players: z.array(player).max(MAX_PLAYERS),
   currentRound: round,
+  targetRedrawsUsedByPlayer: targetRedrawCounters,
+  targetRedrawsUsedByTeam: targetRedrawCounters,
   timerDescriptor: z
     .object({ kind: z.enum(["guess", "psychic", "round-ready"]), endsAt: number })
     .nullable()

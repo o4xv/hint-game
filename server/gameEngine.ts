@@ -39,6 +39,43 @@ export function generateTargetAngle() {
   return Math.random() * 168 + 6;
 }
 
+/** Generated targets stay inside this band, including replacements of historical edge targets. */
+export const TARGET_MIN_ANGLE = 6;
+export const TARGET_MAX_ANGLE = 174;
+/** An answer-position change must move the target at least this far. */
+export const TARGET_REDRAW_MIN_SEPARATION = 45;
+
+/**
+ * Picks the replacement position for a target change. The eligible positions are the two
+ * intervals at least `TARGET_REDRAW_MIN_SEPARATION` away from the previous one, sampled by
+ * their combined length so a longer side is proportionally more likely. The draw is a single
+ * uniform sample rather than a rejection loop, so it always terminates immediately.
+ */
+export function generateReplacementTargetAngle(
+  previousAngle: number,
+  random: () => number = Math.random,
+): number {
+  if (!Number.isFinite(previousAngle) || previousAngle < 0 || previousAngle > 180) {
+    throw new TypeError("Previous target angle must be a finite number between 0 and 180");
+  }
+  const leftLow = TARGET_MIN_ANGLE;
+  const leftHigh = previousAngle - TARGET_REDRAW_MIN_SEPARATION;
+  const rightLow = previousAngle + TARGET_REDRAW_MIN_SEPARATION;
+  const rightHigh = TARGET_MAX_ANGLE;
+  const leftLength = Math.max(0, leftHigh - leftLow);
+  const rightLength = Math.max(0, rightHigh - rightLow);
+  const totalLength = leftLength + rightLength;
+  // Any angle inside 0-180 leaves at least one eligible interval, so this is a guard only.
+  if (totalLength <= 0) throw new RangeError("No eligible replacement position for this target");
+
+  // Clamp a misbehaving random source instead of retrying, and keep the draw below the
+  // exclusive upper bound so the sample never lands outside the two intervals.
+  const raw = random();
+  const sample = (Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 1) : 0) * totalLength;
+  const offset = Math.min(sample, totalLength - Number.EPSILON * totalLength);
+  return offset < leftLength ? leftLow + offset : rightLow + (offset - leftLength);
+}
+
 export function buildPsychicQueue(playerIds: string[]) {
   const queue = [...playerIds];
   for (let i = queue.length - 1; i > 0; i--) {

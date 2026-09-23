@@ -60,6 +60,7 @@ function resetRemovedCardRound(round: Room["currentRound"]): Room["currentRound"
     controllerId: null,
     shouldPromptRating: false,
     redrawUsed: false,
+    targetRevision: 0,
   };
 }
 
@@ -89,6 +90,8 @@ export function serializeRoom(room: Room) {
     roundStartedAt: room.roundStartedAt ?? null,
     players: room.players.map(cleanPlayer),
     currentRound: structuredClone(room.currentRound),
+    targetRedrawsUsedByPlayer: { ...room.targetRedrawsUsedByPlayer },
+    targetRedrawsUsedByTeam: { ...room.targetRedrawsUsedByTeam },
     timerDescriptor: room.timerDescriptor ? { ...room.timerDescriptor } : null,
     matchHistory: structuredClone(room.matchHistory),
     finalState: room.finalState ? structuredClone(room.finalState) : null,
