@@ -374,9 +374,17 @@ test("spectator tabs and player takeover preserve shared reconnect credentials",
     await replacement.goto(`/room/${roomCode}`);
     await owner.waitForFunction(() => window.__hintTest?.getState().playerId === null);
     await expect(replacement.getByText("انتظار اللاعبين")).toBeVisible();
-    expect(
-      await replacement.evaluate(() => JSON.parse(localStorage.getItem("hint_session"))),
-    ).toEqual(saved);
+    const resumed = await replacement.evaluate(() =>
+      JSON.parse(localStorage.getItem("hint_session")),
+    );
+    expect(resumed).toMatchObject({
+      roomCode: saved.roomCode,
+      playerId: saved.playerId,
+      reconnectToken: saved.reconnectToken,
+      displayName: saved.displayName,
+      isOwner: saved.isOwner,
+    });
+    expect(resumed.lastActiveAt).toBeGreaterThanOrEqual(saved.lastActiveAt);
     await replacement.reload();
     await replacement.waitForFunction(
       (id) =>
