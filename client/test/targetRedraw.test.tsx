@@ -246,6 +246,32 @@ it("asks for authoritative recovery after eight seconds without resending", () =
   expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
 });
 
+it("stops the request deadline once the server has answered", () => {
+  vi.useFakeTimers();
+  const { store, send, recover } = renderPsychic();
+  fireEvent.click(changeTarget());
+  const requestId = String((send.mock.calls[0] as [string, Record<string, unknown>])[1].requestId);
+  dispatch(store, {
+    type: "server",
+    event: "target_redrawn",
+    data: {
+      requestId,
+      roundNumber: 3,
+      cardId: "core-7",
+      previousTargetRevision: 0,
+      targetAngle: 12,
+      targetRedraw: available({ remaining: 2, usedThisRound: true, revision: 1 }),
+    },
+  });
+  act(() => {
+    vi.advanceTimersByTime(20_000);
+  });
+  // A success ends the wait: no recovery is asked for and no checking message appears.
+  expect(recover).not.toHaveBeenCalled();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
+});
+
 it("blocks the card change, the position change and the clue while one is pending", () => {
   const { store, send } = renderPsychic({ draft: "شاي ساخن" });
   fireEvent.click(changeTarget());

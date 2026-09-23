@@ -447,7 +447,9 @@ export function PsychicActions() {
 
   // A request that never answers is not resent: the client asks recovery to restate the round.
   useEffect(() => {
-    if (!targetRequest) return;
+    // The deadline only runs while this attempt is still unanswered, so a success or a matching
+    // rejection stops it before it can ask for a needless recovery.
+    if (!targetRequest || !targetPending) return;
     const deadline = targetRequest;
     const timer = setTimeout(() => {
       setTargetRequest((current) => (current === deadline ? null : current));
@@ -457,7 +459,7 @@ export function PsychicActions() {
     return () => {
       clearTimeout(timer);
     };
-  }, [targetRequest, controller]);
+  }, [targetRequest, targetPending, controller]);
   // The controls reopen when the confirmed sweep has landed; the state only records that.
   useEffect(() => {
     if (!moveId || moveId === settledMoveId) return;
