@@ -2,8 +2,8 @@ import { Component, useEffect, type ReactNode } from "react";
 import { useGame, useSession } from "./GameContext";
 import { Entry, Landing, ConnectionStatus } from "./Entry";
 import { Lobby } from "./Lobby";
-import { Guessing, Psychic } from "./Game";
-import { Reveal, Spectator, Waiting, Winner } from "./Results";
+import { PlayScene, Spectator } from "./PlayScene";
+import { Waiting, Winner } from "./Results";
 import { UpdateBanner } from "./UpdateBanner";
 import { JoinRequests } from "./RoomControls";
 import { GameMenuProvider } from "./GameMenu";
@@ -135,7 +135,9 @@ export function App() {
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
     }
-    window.scrollTo({ top: 0 });
+    // Entering the reveal keeps the dial where it was: the results grow the page instead of
+    // scrolling back to the top, which would hide the answer that is animating in.
+    if (screen !== "reveal") window.scrollTo({ top: 0 });
   }, [screen]);
   let content: ReactNode;
   switch (screen) {
@@ -149,13 +151,10 @@ export function App() {
       content = <Lobby />;
       break;
     case "game-player":
-      content = <Guessing key={turnKey} />;
-      break;
     case "game-psychic":
-      content = <Psychic key={turnKey} />;
-      break;
     case "reveal":
-      content = <Reveal key={turnKey} />;
+      // One scene for the clue, the guess and the reveal, so the dial never remounts mid-turn.
+      content = <PlayScene key={turnKey} />;
       break;
     case "winner":
       // A spectator who left the deciding reveal sees the read-only standings.

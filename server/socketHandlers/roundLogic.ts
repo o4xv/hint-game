@@ -6,6 +6,7 @@ import {
   drawCardForTarget,
   getNextPsychic,
   generateTargetAngle,
+  generateReplacementTargetAngle,
   getWinners,
   calculateAwards,
   getTargetRegion,
@@ -34,6 +35,13 @@ import { getCardsForPacks } from "../data/cards.js";
 import { trackGameplay } from "../telemetry.js";
 import { finishIfInsufficientPlayers, finishMatch } from "./matchLifecycle.js";
 import { roomCardRedrawStatus } from "../services/capabilities.js";
+import {
+  spendTargetRedraw,
+  targetRedrawOwner,
+  targetRedrawState,
+  targetRedrawsUsed,
+} from "../services/targetRedraw.js";
+import { TARGET_REDRAWS_PER_MATCH, type TargetRedrawState } from "@hint/contracts";
 
 const GUESS_TIMEOUT_MS = TIMEOUTS.GUESS;
 const PSYCHIC_TIMEOUT_MS = TIMEOUTS.PSYCHIC;
@@ -84,12 +92,14 @@ export function startRound(io: GameIO, room: Room) {
   room.currentRound.previewAngle = null;
   room.currentRound.shouldPromptRating = false;
   room.currentRound.redrawUsed = false;
+  room.currentRound.targetRevision = 0;
   room.finalState = null;
   room.players.forEach((p) => {
     p.hasSubmitted = false;
   });
 
   const redraw = roomCardRedrawStatus(io, room);
+  const targetRedraw = targetRedrawState(room);
   io.to(room.code).emit("round_start", {
     roundNumber: room.currentRound.roundNumber,
     psychicId,
@@ -101,22 +111,25 @@ export function startRound(io: GameIO, room: Room) {
     redrawUsed: false,
     redrawAvailable: redraw.available,
     redrawReason: redraw.reason,
+    targetRedraw,
   });
-  io.to(psychicPlayer.socketId ?? "").emit("target_reveal", { targetAngle });
+  io.to(psychicPlayer.socketId ?? "").emit("target_reveal", {
+    targetAngle,
+    roundNumber: room.currentRound.roundNumber,
+    cardId: room.currentRound.card.id,
+    targetRevision: room.currentRound.targetRevision,
+  });
 
   startPsychicTimer(io, room);
 }
 
 /**
- * One code path for losing a turn: a voluntary skip and an expired psychic timer deduct
- * the same point from the same owner and advance exactly once, even if both arrive.
+ * Losing a turn to the automatic clue deadline: the owner (the psychic in individual mode,
+ * the active team in team mode) loses exactly one point and the turn advances exactly once,
+ * even if the timer callback arrives twice. Voluntary skipping no longer exists; this is the
+ * only caller of the path.
  */
-export function advanceSkippedTurn(
-  io: GameIO,
-  room: Room,
-  psychicId: string,
-  source: "skip" | "timeout",
-): boolean {
+export function advanceExpiredPsychicTurn(io: GameIO, room: Room, psychicId: string): boolean {
   if (
     room.status !== "playing" ||
     room.currentRound.psychicId !== psychicId ||
@@ -142,7 +155,7 @@ export function advanceSkippedTurn(
     updatedScores,
     updatedTeams: getPublicTeams(room),
     gameMode: room.gameMode,
-    source,
+    source: "timeout",
   });
   trackGameplay("card_skipped_for_review", {
     playerId: psychic.id,
@@ -152,7 +165,7 @@ export function advanceSkippedTurn(
     targetRegion: getTargetRegion(room.currentRound.targetAngle)?.id ?? "unknown",
     roundNumber: room.currentRound.roundNumber,
     gameMode: room.gameMode,
-    reason: source === "skip" ? "voluntary_skip" : "psychic_timeout",
+    reason: "psychic_timeout",
   });
   startRound(io, room);
   return true;
@@ -164,7 +177,7 @@ export function startPsychicTimer(io: GameIO, room: Room, delayMs = PSYCHIC_TIME
   const endsAt = setRoomTimer(
     room,
     () => {
-      advanceSkippedTurn(io, room, psychicId, "timeout");
+      advanceExpiredPsychicTurn(io, room, psychicId);
     },
     delayMs,
     "psychic",
@@ -222,6 +235,105 @@ export function redrawCurrentCard(
     gameMode: room.gameMode,
   });
   return { ok: true, previousCardId };
+}
+
+export interface TargetRedrawRequest {
+  playerId: string | null;
+  roundNumber: number;
+  cardId: string;
+  targetRevision: number;
+  requestId: string;
+  /** Connection-time capability of the requesting socket. */
+  supported: boolean;
+  random?: () => number;
+}
+
+export interface TargetRedrawSuccess {
+  requestId: string;
+  roundNumber: number;
+  cardId: string;
+  previousTargetRevision: number;
+  targetAngle: number;
+  targetRedraw: TargetRedrawState;
+}
+
+/** A paused (disconnected) psychic turn has no descriptor, so it never reads as expired. */
+function psychicDeadlineElapsed(room: Room, now = Date.now()): boolean {
+  const descriptor = room.timerDescriptor;
+  return room.psychicTimerEnabled && descriptor?.kind === "psychic" && descriptor.endsAt <= now;
+}
+
+/**
+ * Moves the answer position of the live turn. Everything is checked and mutated
+ * synchronously, so two clicks that arrive in the same tick cannot both spend a use: the
+ * first one advances the revision and the second reads it as already used.
+ */
+export function redrawTarget(
+  room: Room,
+  {
+    playerId,
+    roundNumber,
+    cardId,
+    targetRevision,
+    requestId,
+    supported,
+    random = Math.random,
+  }: TargetRedrawRequest,
+): { ok: true; payload: TargetRedrawSuccess } | { ok: false; code: string } {
+  const round = room.currentRound;
+  if (!playerId || round.psychicId !== playerId) return { ok: false, code: "NOT_PSYCHIC" };
+  if (!supported) return { ok: false, code: "TARGET_REDRAW_UNSUPPORTED" };
+  if (room.status !== "playing") return { ok: false, code: "ROOM_NOT_PLAYING" };
+  if (round.roundNumber !== roundNumber) return { ok: false, code: "STALE_ROUND" };
+  if (round.status !== "waiting" || round.clue) return { ok: false, code: "CLUE_ACCEPTED" };
+  const card = round.card;
+  if (card?.id !== cardId) return { ok: false, code: "STALE_CARD" };
+  if (round.targetRevision !== targetRevision) return { ok: false, code: "STALE_TARGET" };
+  if (round.targetRevision > 0) return { ok: false, code: "TARGET_REDRAW_USED" };
+
+  const ownerId = targetRedrawOwner(room);
+  if (!ownerId) return { ok: false, code: "NO_TARGET" };
+  const used = targetRedrawsUsed(room, ownerId);
+  if (used >= TARGET_REDRAWS_PER_MATCH) return { ok: false, code: "TARGET_REDRAW_EXHAUSTED" };
+
+  const previousAngle = round.targetAngle;
+  if (previousAngle === null || !Number.isFinite(previousAngle)) {
+    return { ok: false, code: "NO_TARGET" };
+  }
+  if (psychicDeadlineElapsed(room)) return { ok: false, code: "TURN_EXPIRED" };
+
+  const targetAngle = generateReplacementTargetAngle(previousAngle, random);
+
+  const previousTargetRevision = round.targetRevision;
+  round.targetAngle = targetAngle;
+  round.targetRevision = previousTargetRevision + 1;
+  spendTargetRedraw(room, ownerId, used);
+  // Drafts and pre-clue previews belong to the old position and must not survive the change.
+  round.previewAngle = null;
+  touchActivity(room);
+  persistRoom(room);
+
+  trackGameplay("target_redrawn", {
+    roomId: room.code,
+    roundNumber: round.roundNumber,
+    cardId: card.id,
+    packId: card.packId,
+    targetRegion: getTargetRegion(targetAngle)?.id ?? "unknown",
+    gameMode: room.gameMode,
+    reason: room.gameMode === "teams" ? "team_allowance" : "player_allowance",
+  });
+
+  return {
+    ok: true,
+    payload: {
+      requestId,
+      roundNumber: round.roundNumber,
+      cardId: card.id,
+      previousTargetRevision,
+      targetAngle,
+      targetRedraw: targetRedrawState(room),
+    },
+  };
 }
 
 export function resumePsychicTimer(io: GameIO, room: Room, remainingMs: number | null) {

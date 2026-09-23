@@ -48,6 +48,7 @@ const events = {
   guess_accepted: true,
   guess_rejected: true,
   card_redrawn: true,
+  target_redrawn: true,
   player_guessed: true,
   team_guess_preview: true,
   round_skipped: true,

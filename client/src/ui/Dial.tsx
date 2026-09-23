@@ -1,4 +1,13 @@
-import { memo, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import type { GuessResult } from "@hint/contracts";
 import {
   clampAngle,
@@ -14,6 +23,34 @@ const zones = [
   { outer: 16, inner: 6, color: "#FFE66D", points: 2 },
   { outer: 6, inner: 0, color: "#FF6B6B", points: 3 },
 ];
+/** Center each number in the visible part of its band, including near the dial endpoints. */
+function zoneLabelAngles(target: number, zone: (typeof zones)[number]) {
+  const ranges: [number, number][] = zone.inner
+    ? [
+        [target - zone.outer, target - zone.inner],
+        [target + zone.inner, target + zone.outer],
+      ]
+    : [[target - zone.outer, target + zone.outer]];
+  return ranges.flatMap(([start, end]) => {
+    const visibleStart = clampAngle(start);
+    const visibleEnd = clampAngle(end);
+    // A fragment narrower than a digit should stay unlabelled instead of spilling into its neighbour.
+    return visibleEnd - visibleStart >= 6 ? [(visibleStart + visibleEnd) / 2] : [];
+  });
+}
+/** The confirmed sweep, then the landing pulse: the whole settle takes about 600ms. */
+const TARGET_MOVE_SWEEP_MS = 450;
+const TARGET_MOVE_LANDED_MS = 600;
+/** Reduced motion keeps the confirmation without a sweep. */
+const TARGET_MOVE_REDUCED_MS = 150;
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 interface DialProps {
   angle?: number | null;
@@ -29,6 +66,18 @@ interface DialProps {
   onDraft?: (angle: number) => void;
   onPreview?: (angle: number) => void;
   onTick?: () => void;
+  /**
+   * Opt-in: animates a confirmed answer-position change instead of jumping to it. The tutorial
+   * and the pre-reveal dials keep the default, which never animates and never remounts state.
+   */
+  animateTarget?: boolean;
+  /** Changes to this token start one sweep; a recovered position arrives without a new token. */
+  moveToken?: number;
+  /**
+   * Opt-in staged reveal: `null`/`undefined` shows the scoring zones and every needle at once,
+   * `0` keeps the zones hidden, `1` reveals them and `2` adds the other players' needles.
+   */
+  revealStage?: number | null;
 }
 
 function Needle({
@@ -128,14 +177,71 @@ export const Dial = memo(function Dial({
   onDraft,
   onPreview,
   onTick,
+  animateTarget = false,
+  moveToken,
+  revealStage,
 }: DialProps) {
   const id = useId().replaceAll(":", "");
   const [drag, setDrag] = useState<{ pointerId: number; angle: number } | null>(null);
+  const [movePhase, setMovePhase] = useState<"idle" | "moving" | "landed" | "settled">("idle");
+  const [observedMoveToken, setObservedMoveToken] = useState(moveToken);
+  const seenMoveToken = useRef(moveToken);
   const draft = useRef(angle ?? 90);
   const pointer = useRef<number | null>(null);
   const lastPreview = useRef(-Infinity);
   const enabled = interactive && !locked;
   const shownAngle = enabled && drag ? drag.angle : angle;
+  // The confirmed angle reaches render before the sweep effect starts. Hide labels on that
+  // very first frame too, or they briefly point at the new bands while the old ones remain.
+  const moveStarting =
+    animateTarget && moveToken !== undefined && moveToken > (observedMoveToken ?? 0);
+  const labelsMoving = moveStarting || movePhase === "moving";
+  // The first token a mounted dial sees is its starting position, never a move to animate, and
+  // only a rising token is a newly confirmed change. Recovery drops the token back to zero and
+  // restores the authoritative position: that cancels any pending phase instead of sweeping.
+  useEffect(() => {
+    if (!animateTarget || moveToken === undefined) return;
+    const previousToken = seenMoveToken.current ?? 0;
+    seenMoveToken.current = moveToken;
+    if (moveToken <= previousToken) {
+      const settle = setTimeout(() => {
+        setObservedMoveToken(moveToken);
+        setMovePhase("settled");
+      }, 0);
+      return () => {
+        clearTimeout(settle);
+      };
+    }
+    // The phases run on their own timers, so the rotation itself is never re-rendered.
+    const reduced = prefersReducedMotion();
+    const timers = reduced
+      ? [
+          setTimeout(() => {
+            setObservedMoveToken(moveToken);
+            setMovePhase("landed");
+          }, 0),
+          setTimeout(() => {
+            setMovePhase("settled");
+          }, TARGET_MOVE_REDUCED_MS),
+        ]
+      : [
+          setTimeout(() => {
+            setObservedMoveToken(moveToken);
+            setMovePhase("moving");
+          }, 0),
+          // A bounded fallback instead of an animation event that may never arrive.
+          setTimeout(() => {
+            setMovePhase("landed");
+          }, TARGET_MOVE_SWEEP_MS),
+          setTimeout(() => {
+            setMovePhase("settled");
+          }, TARGET_MOVE_LANDED_MS),
+        ];
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [animateTarget, moveToken]);
+  const zonesVisible = revealStage === null || revealStage === undefined || revealStage >= 1;
 
   function preview(next: number) {
     const now = Date.now();
@@ -227,6 +333,10 @@ export const Dial = memo(function Dial({
         <filter id={`${id}-shadow`} x="-20%" y="-25%" width="140%" height="155%">
           <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#000" floodOpacity=".28" />
         </filter>
+        {/* Keeps the rotated scoring bands inside the dial face near 6 and 174 degrees. */}
+        <clipPath id={`${id}-face`}>
+          <path d={dialWedge(0, 180)} />
+        </clipPath>
       </defs>
       <path
         d={dialWedge(0, 180)}
@@ -251,29 +361,39 @@ export const Dial = memo(function Dial({
       <path d="M 10 190 L 370 190" stroke="#6C5CE7" strokeWidth={3} />
       {targetAngle !== null && (
         <g className="scoring-zones-group">
-          {zones.map((zone) => (
-            <path
-              key={zone.points}
-              d={dialWedge(
-                clampAngle(targetAngle - zone.outer),
-                clampAngle(targetAngle + zone.outer),
-              )}
-              fill={zone.color}
-              stroke="rgba(26,26,46,.28)"
-              strokeWidth={1.25}
-              className={`dial-zone zone-pts-${zone.points}`}
-            />
-          ))}
-          {zones.flatMap((zone) =>
-            (zone.inner
-              ? [
-                  targetAngle - (zone.outer + zone.inner) / 2,
-                  targetAngle + (zone.outer + zone.inner) / 2,
-                ]
-              : [targetAngle]
-            )
-              .filter((position) => position >= 0 && position <= 180)
-              .map((position, index) => {
+          {/* Reveal opacity/scale lives on this outer group; the sweep rotates the inner one. */}
+          <g
+            className={`dial-zones-reveal${zonesVisible ? " is-visible" : ""}`}
+            aria-hidden={zonesVisible ? undefined : true}
+          >
+            <g clipPath={`url(#${id}-face)`}>
+              <g
+                className={`dial-zones-rotor${movePhase === "moving" ? " is-moving" : ""}${
+                  movePhase === "landed" ? " is-landing" : ""
+                }`}
+                style={{ transform: `rotate(${targetAngle - 90}deg)` }}
+              >
+                {zones.map((zone) => (
+                  <path
+                    key={zone.points}
+                    d={dialWedge(clampAngle(90 - zone.outer), clampAngle(90 + zone.outer))}
+                    fill={zone.color}
+                    stroke="rgba(26,26,46,.28)"
+                    strokeWidth={1.25}
+                    className={`dial-zone zone-pts-${zone.points}`}
+                  />
+                ))}
+              </g>
+            </g>
+          </g>
+          {/* The numbers stay upright and never rotate with the bands. */}
+          <g
+            className={`dial-zone-labels${labelsMoving ? " is-moving" : ""}${
+              zonesVisible ? " is-visible" : ""
+            }`}
+          >
+            {zones.flatMap((zone) =>
+              zoneLabelAngles(targetAngle, zone).map((position, index) => {
                 const point = pointOnDial(position, 180 * 0.72);
                 return (
                   <text
@@ -293,7 +413,8 @@ export const Dial = memo(function Dial({
                   </text>
                 );
               }),
-          )}
+            )}
+          </g>
         </g>
       )}
       {guesses
@@ -303,11 +424,21 @@ export const Dial = memo(function Dial({
                 key={guess.playerId ?? guess.teamId ?? index}
                 data-player-id={guess.playerId}
                 data-needle={guess.displayName}
-                className={
+                style={{ "--needle-index": Math.min(index, 6) } as CSSProperties}
+                className={[
                   highlightPlayerId === null || guess.playerId === highlightPlayerId
-                    ? undefined
-                    : "is-dimmed"
-                }
+                    ? null
+                    : "is-dimmed",
+                  // A submitted needle never moves, so only the others fade in on their stage.
+                  revealStage !== null &&
+                  revealStage !== undefined &&
+                  revealStage >= 2 &&
+                  guess.playerId !== playerId
+                    ? "dial-needle-entry"
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
                 <Needle
                   angle={guess.angle}

@@ -66,6 +66,11 @@ export interface Round {
   shouldPromptRating: boolean;
   /** One free card replacement per turn; older snapshots default it to false. */
   redrawUsed: boolean;
+  /**
+   * Increments once when the answer position changes. It is the round's single source of
+   * truth for "this turn already moved the target"; do not add a separate boolean.
+   */
+  targetRevision: number;
 }
 export interface HistoryRound {
   roundNumber: number;
@@ -108,6 +113,10 @@ export interface Room {
   joinRequests: JoinRequest[];
   players: Player[];
   currentRound: Round;
+  /** Answer-position changes spent per player across the match (individual mode). */
+  targetRedrawsUsedByPlayer: Record<string, number>;
+  /** Answer-position changes spent per team across the match (team mode). */
+  targetRedrawsUsedByTeam: Record<string, number>;
   timer: TimeoutHandle | null;
   timerEndsAt: number | null;
   timerDescriptor: TimerDescriptor | null;

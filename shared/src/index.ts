@@ -17,6 +17,11 @@ export const WINNING_SCORES = [10, 20, 30, 40] as const;
 export const GAME_MODES = ["individual", "teams"] as const;
 /** Seats per room, shared by admission, reservations, snapshots and the lobby. */
 export const MAX_PLAYERS = 12;
+/**
+ * Answer-position changes a player (individual) or a team (team mode) may spend across one
+ * match. Server-authoritative; the client only renders what the server reports.
+ */
+export const TARGET_REDRAWS_PER_MATCH = 3;
 /** Team names are trimmed to this many Unicode code points. */
 export const TEAM_NAME_MAX_LENGTH = 24;
 export type TeamNameIssue = "blank" | "invalid" | "too_long" | "duplicate";
@@ -57,6 +62,17 @@ export type RatingVote = "up" | "down";
  * guessing which participant blocks it.
  */
 export type RedrawReason = "incompatible" | "disconnected";
+/**
+ * The current turn's answer-position allowance, as the server sees it. It never carries a
+ * target angle: older servers omit the whole object and the client shows the unsupported
+ * explanation instead of guessing.
+ */
+export interface TargetRedrawState {
+  supported: boolean;
+  remaining: number;
+  usedThisRound: boolean;
+  revision: number;
+}
 export type RoomStatus = "waiting" | "playing" | "finished";
 export type RoundStatus = "waiting" | "guessing" | "revealed";
 export type TimerPhase = "psychic" | "guessing" | "round-ready";
@@ -180,6 +196,8 @@ export interface RoundStartPayload extends PublicRoomMode {
   redrawAvailable: boolean;
   /** Why replacement is unavailable, when the server can name the blocker. */
   redrawReason?: RedrawReason | null;
+  /** The current turn's answer-position allowance; omitted by servers that predate it. */
+  targetRedraw?: TargetRedrawState;
 }
 interface RoundSnapshotBase {
   roundNumber: number;
@@ -193,6 +211,7 @@ interface RoundSnapshotBase {
   redrawUsed: boolean;
   redrawAvailable: boolean;
   redrawReason?: RedrawReason | null;
+  targetRedraw?: TargetRedrawState;
 }
 interface MemberRoundSnapshot extends RoundSnapshotBase {
   timerEndsAt: number | null;
@@ -301,9 +320,15 @@ export interface IncomingPayloads {
   kick_player: RoomCodePayload & { playerId: string };
   start_game: RoomCodePayload;
   watch_room: RoomCodePayload;
-  clue_submitted: RoundActionPayload & { clue: string; cardId?: string };
+  clue_submitted: RoundActionPayload & { clue: string; cardId?: string; targetRevision?: number };
   skip_round: RoundActionPayload & { cardId?: string };
   redraw_card: RoundActionPayload & { cardId: string };
+  redraw_target: RoundActionPayload & {
+    roundNumber: number;
+    cardId: string;
+    targetRevision: number;
+    requestId: string;
+  };
   guess_submitted: RoundActionPayload & { angle: number | string; cardId?: string };
   guess_preview: RoomCodePayload & {
     angle: number | string;
@@ -364,7 +389,13 @@ export interface ServerToClientEvents {
   game_started: (payload: MatchStartedPayload) => void;
   rematch_started: (payload: MatchStartedPayload) => void;
   round_start: (payload: RoundStartPayload) => void;
-  target_reveal: (payload: { targetAngle: number }) => void;
+  target_reveal: (payload: {
+    targetAngle: number;
+    /** Context supplied by upgraded servers so a delayed initial target cannot overwrite a change. */
+    roundNumber?: number;
+    cardId?: string;
+    targetRevision?: number;
+  }) => void;
   clue_broadcast: (payload: { clue: string; psychicName: string }) => void;
   timer_start: (payload: {
     endsAt: number;
@@ -378,6 +409,15 @@ export interface ServerToClientEvents {
     previousCardId: string;
     card: PublicCard;
     redrawUsed: true;
+  }) => void;
+  /** Private acknowledgement to the clue giver; the new angle and counters arrive together. */
+  target_redrawn: (payload: {
+    requestId: string;
+    roundNumber: number;
+    cardId: string;
+    previousTargetRevision: number;
+    targetAngle: number;
+    targetRedraw: TargetRedrawState;
   }) => void;
   player_guessed: (payload: {
     playerId: string;
@@ -412,5 +452,7 @@ export interface ServerToClientEvents {
      * the client then only shows the error on the editor that is waiting for an answer.
      */
     teamId?: string;
+    /** Echoed for correlated actions such as a target change. */
+    requestId?: string;
   }) => void;
 }

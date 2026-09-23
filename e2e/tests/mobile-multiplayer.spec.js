@@ -942,6 +942,8 @@ test("exact rounds reach awards and rematch cleanly", async ({ browser }) => {
         clue: "دقيق",
         roundNumber: window.__hintTest.getState().round.roundNumber,
         cardId: window.__hintTest.getState().round.card?.id,
+        // The socket advertises the answer-position capability, so its clue names the revision.
+        targetRevision: window.__hintTest.getState().round.targetRedraw.revision,
       }),
     );
     await guesser.waitForFunction(() => Boolean(window.__hintTest.getState().round.clue));

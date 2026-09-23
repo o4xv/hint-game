@@ -34,7 +34,9 @@ const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(serverUrl,
   autoConnect: false,
   // Same-turn replacement changes the card for everyone, so the server only offers it
   // while every live participant advertises this capability.
-  auth: { cardRedrawV1: true },
+  // A position change only alters the clue giver's own secret, so this capability is per
+  // connection and never blocks anyone else.
+  auth: { cardRedrawV1: true, targetRedrawV1: true },
   transports: ["websocket", "polling"],
   reconnectionAttempts: 12,
   reconnectionDelay: 1000,

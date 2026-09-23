@@ -342,10 +342,10 @@ test("the game header anchors the timer and keeps one explanation per role", asy
       .evaluate((element) => getComputedStyle(element).paddingTop);
     expect(headerPadding).toBe("6px");
 
-    // The replacement explanation exists once, and never as a repeated warning.
-    await expect(psychic.locator(".redraw-note")).toHaveCount(1);
-    const notes = await psychic.locator(".redraw-note").allTextContents();
-    expect(notes.join(" ")).toMatch(/تغيير/);
+    // The concise allowance is visible inside the button; the detailed reason stays accessible.
+    await expect(psychic.getByText("1 مجاني لكل دور")).toBeVisible();
+    await expect(psychic.locator("#card-redraw-note.sr-only")).toHaveCount(1);
+    expect(await psychic.locator("#card-redraw-note").textContent()).toMatch(/تغيير/);
     const statusText = await psychic.locator(".round-status-state").textContent();
     expect(statusText ?? "").not.toContain("تغيير");
 

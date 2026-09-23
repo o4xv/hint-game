@@ -1274,7 +1274,6 @@
 .reveal-dial-stage {
   flex: 1;
   min-height: 190px;
-  padding: 0 10px !important;
 }
 .reveal-zones {
   opacity: 0;

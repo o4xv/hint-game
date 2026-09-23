@@ -32,6 +32,13 @@ const valid = {
   clue_submitted: { ...room, clue: "clue", roundNumber: 1 },
   skip_round: { ...room, roundNumber: 1 },
   redraw_card: { ...room, roundNumber: 1, cardId: "core-1" },
+  redraw_target: {
+    ...room,
+    roundNumber: 1,
+    cardId: "core-1",
+    targetRevision: 0,
+    requestId: "request-1",
+  },
   guess_submitted: { ...room, angle: 90, roundNumber: 1 },
   guess_preview: { ...room, angle: 90, roundNumber: 1 },
   next_round: { ...room, roundNumber: 1 },
@@ -118,11 +125,18 @@ for (const event of Object.keys(incomingSchemas) as IncomingEvent[]) {
         continue;
       h.send(payload);
       assert.equal(h.accepted.length, 1, JSON.stringify({ event, payload }));
+      const echoedRequestId =
+        event === "redraw_target" &&
+        typeof payload === "object" &&
+        payload !== null &&
+        typeof Reflect.get(payload, "requestId") === "string"
+          ? { requestId: Reflect.get(payload, "requestId") as string }
+          : {};
       assert.deepEqual(
         h.emitted.at(-1)?.event === "action_error"
           ? h.emitted.at(-1)?.data
           : [...h.emitted].reverse().find((e) => e.event === "action_error")?.data,
-        { event, code: "INVALID_PAYLOAD" },
+        { event, code: "INVALID_PAYLOAD", ...echoedRequestId },
       );
     }
   });
@@ -139,7 +153,17 @@ void test("every round action rejects stale context before calling mutation hand
     const before = serializeRoom(state);
     h.send(valid[event]);
     assert.equal(h.accepted.length, 0, event);
-    assert.deepEqual(h.emitted, [{ event: "action_error", data: { event, code: "STALE_ROUND" } }]);
+    assert.deepEqual(h.emitted, [
+      {
+        event: "action_error",
+        data: {
+          event,
+          code: "STALE_ROUND",
+          // A correlated action keeps its request id so the client can match the rejection.
+          ...(event === "redraw_target" ? { requestId: "request-1" } : {}),
+        },
+      },
+    ]);
     const after = serializeRoom(state);
     assert.deepEqual({ ...after, savedAt: 0 }, { ...before, savedAt: 0 });
   }
