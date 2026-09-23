@@ -352,6 +352,11 @@
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
+.screen.game.game-shell.reveal-screen > .dial-stage {
+  flex: 0 0 auto;
+  min-height: 0;
+  transition: height 320ms var(--ease-out);
+}
 
 .game-info-bar {
   display: flex;
@@ -1318,6 +1323,11 @@
   gap: 4px;
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.8);
 }
+.reveal-score-card.is-scrollable {
+  max-height: min(45dvh, 420px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
 .reveal-score-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px 52px;
@@ -1694,9 +1704,8 @@ html.coachmark-open .screen {
 }
 
 @media (max-height: 700px) {
-  .reveal-score-card {
+  .reveal-score-card.is-scrollable {
     max-height: 168px;
-    overflow-y: auto;
   }
   .reveal-score-header {
     position: sticky;
@@ -1713,6 +1722,12 @@ html.coachmark-open .screen {
   .reveal-screen .social-button {
     width: 40px;
     height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.game.game-shell.reveal-screen > .dial-stage {
+    transition: none;
   }
 }
 

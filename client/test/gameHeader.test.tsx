@@ -107,6 +107,17 @@ it("keeps one dialog while moving between menu panels", () => {
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "مغادرة" }));
   expect(leave).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("closes an open game menu when the room is cleared externally", () => {
+  const { store } = mount();
+  fireEvent.click(screen.getByRole("button", { name: "قائمة اللعبة" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  act(() => {
+    store.dispatch({ type: "reset" });
+  });
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("keeps an open panel while the live screen changes behind it", () => {

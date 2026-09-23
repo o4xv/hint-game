@@ -42,7 +42,7 @@ function RoundScores({
   const breakdown = data.psychicBreakdown;
   return (
     <section
-      className={`card reveal-score-card reveal-stage${stage >= SCORE_STAGE ? " is-visible" : ""}`}
+      className={`card reveal-score-card reveal-stage${entries.length > 4 ? " is-scrollable" : ""}${stage >= SCORE_STAGE ? " is-visible" : ""}`}
       aria-label="نقاط الجولة والمجموع"
       tabIndex={0}
       // A stage that has not arrived yet must be unreachable for keyboard and assistive tech.

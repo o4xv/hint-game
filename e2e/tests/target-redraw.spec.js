@@ -99,7 +99,7 @@ async function dragDialTo(page, angle, { release = true } = {}) {
 
 test("an individual clue giver changes the answer position and the round still scores", async ({
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
   const ownerContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -198,16 +198,17 @@ test("an individual clue giver changes the answer position and the round still s
       score: Boolean(document.querySelector(".reveal-score-card.is-visible")),
       handoffInert: document.querySelector(".reveal-handoff")?.hasAttribute("inert") ?? null,
       otherNeedles: document.querySelectorAll("g[data-player-id]").length > 1,
+      dialTop: document.querySelector(".dial-svg")?.getBoundingClientRect().top ?? null,
+      dialWidth: document.querySelector(".dial-svg")?.getBoundingClientRect().width ?? null,
     }));
     expect(firstFrame.closest, JSON.stringify(firstFrame)).toBe(false);
     expect(firstFrame.score, JSON.stringify(firstFrame)).toBe(false);
     expect(firstFrame.handoffInert, JSON.stringify(firstFrame)).toBe(true);
     expect(firstFrame.otherNeedles, JSON.stringify(firstFrame)).toBe(false);
+    expect(Math.abs(firstFrame.dialTop - dialBefore.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(firstFrame.dialWidth - dialBefore.width)).toBeLessThanOrEqual(1);
     const stageAfter = await guesser.locator(".dial-stage").boundingBox();
-    const dialAfter = await guesser.locator(".dial-svg").boundingBox();
     expect(Math.abs(stageAfter.y - stageBefore.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(dialAfter.y - dialBefore.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(dialAfter.width - dialBefore.width)).toBeLessThanOrEqual(1);
 
     await expect(guesser.locator(".reveal-score-card")).toContainText("+3");
     // The stages then arrive in order, each one only after the previous one is on screen.
@@ -216,6 +217,34 @@ test("an individual clue giver changes the answer position and the round still s
     await expect(guesser.locator(".dial-zones-reveal")).toHaveClass(/is-visible/);
     await expect(guesser.locator(".reveal-score-card")).toHaveClass(/is-visible/);
     await expect(guesser.locator(".reveal-handoff")).not.toHaveAttribute("inert", "");
+    // The played dial slot is held through the opening animation, then its unused space closes.
+    await expect
+      .poll(async () => {
+        const stage = await guesser.locator(".dial-stage").boundingBox();
+        const dial = await guesser.locator(".dial-svg").boundingBox();
+        return stage.height - dial.height;
+      })
+      .toBeLessThan(24);
+    const compactDial = await guesser.locator(".dial-svg").boundingBox();
+    const closest = await guesser.locator(".reveal-closest").boundingBox();
+    expect(closest.y - compactDial.y - compactDial.height).toBeLessThan(28);
+    const scoreCard = guesser.locator(".reveal-score-card");
+    expect(await scoreCard.evaluate((element) => element.scrollHeight - element.clientHeight)).toBe(
+      0,
+    );
+    await guesser.screenshot({ path: testInfo.outputPath("reveal-portrait.png"), fullPage: true });
+    await guesser.setViewportSize({ width: 320, height: 568 });
+    await expect
+      .poll(async () => {
+        const stage = await guesser.locator(".dial-stage").boundingBox();
+        const dial = await guesser.locator(".dial-svg").boundingBox();
+        return stage.height - dial.height;
+      })
+      .toBeLessThan(24);
+    expect(await guesser.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      320,
+    );
+    await guesser.screenshot({ path: testInfo.outputPath("reveal-320.png"), fullPage: true });
     const scored = await snapshot(guesser);
     expect(scored.scores.some((player) => player.score > 0)).toBe(true);
   } finally {

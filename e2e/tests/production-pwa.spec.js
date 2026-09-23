@@ -1,4 +1,13 @@
 import { test, expect } from "@playwright/test";
+
+async function sessionCredentials(page) {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("hint_session");
+    if (!raw) return null;
+    const { roomCode, playerId, reconnectToken, displayName, isOwner } = JSON.parse(raw);
+    return { roomCode, playerId, reconnectToken, displayName, isOwner };
+  });
+}
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -79,7 +88,7 @@ for (const externalActivation of [false, true]) {
         await page.getByRole("button", { name: "إنشاء غرفة", exact: true }).click();
         await expect(page.getByRole("heading", { name: "انتظار اللاعبين" })).toBeVisible();
         const code = await page.locator(".lobby-room-code").innerText();
-        const session = await page.evaluate(() => localStorage.getItem("hint_session"));
+        const session = await sessionCredentials(page);
         expect(session).toBeTruthy();
         expect(await page.evaluate(() => typeof window.__hintTest)).toBe("undefined");
         await page.waitForFunction(() => navigator.serviceWorker.controller);
@@ -155,7 +164,7 @@ for (const externalActivation of [false, true]) {
           ).toBeVisible({ timeout: 35_000 }); // Existing server reconnect grace is30seconds.
         }
         await expect(page.getByRole("button", { name: "تحديث", exact: true })).toBeVisible();
-        expect(await page.evaluate(() => localStorage.getItem("hint_session"))).toBe(session);
+        expect(await sessionCredentials(page)).toEqual(session);
         if (!externalActivation) await expect(page.locator(".lobby-room-code")).toHaveText(code);
         await Promise.all([
           page.waitForEvent("load"),
@@ -178,12 +187,12 @@ for (const externalActivation of [false, true]) {
           )
           .toBe(true);
         if (!externalActivation) await expect(page.locator(".lobby-room-code")).toHaveText(code);
-        expect(await page.evaluate(() => localStorage.getItem("hint_session"))).toBe(session);
+        expect(await sessionCredentials(page)).toEqual(session);
         expect(await page.evaluate(() => caches.has("unrelated-app-cache"))).toBe(true);
         await context.setOffline(true);
         await page.goto(`${origin}/room/${code}`);
         await expect(page.getByRole("heading", { name: "استعادة المباراة" })).toBeVisible();
-        expect(await page.evaluate(() => localStorage.getItem("hint_session"))).toBe(session);
+        expect(await sessionCredentials(page)).toEqual(session);
         await context.setOffline(false);
         await expect(page.locator(".recovery-overlay")).toHaveCount(0);
         await expect(
