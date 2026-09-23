@@ -259,5 +259,5 @@ it("keeps the written rules one tap away from the practice round", () => {
   fireEvent.click(screen.getByRole("tab", { name: "جرّب جولة" }));
   expect(screen.getByText("الوسيط يرى الهدف").closest("[hidden]")).toBeNull();
   // The replacement-versus-skip tip lives outside the four steps.
-  expect(screen.getByText("ما الفرق بين تغيير البطاقة وتخطي الدور؟")).toBeTruthy();
+  expect(screen.getByText("ما الفرق بين تغيير البطاقة وتغيير مكان الإجابة؟")).toBeTruthy();
 });

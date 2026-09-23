@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
-import { Psychic } from "../src/ui/Game";
+import { Psychic } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession, type SessionState } from "../src/session/store";
 
 beforeEach(() => {
@@ -105,7 +105,7 @@ it("hides replacement when a live client cannot understand it", () => {
   const replace = screen.getByRole("button", { name: "تغيير البطاقة" });
   expect(replace.hasAttribute("disabled")).toBe(true);
   expect(
-    screen.getByText("تغيير البطاقة غير متاح الآن. يمكنك المتابعة أو تخطي الدور."),
+    screen.getByText("تغيير البطاقة غير متاح الآن. يمكنك المتابعة بالتلميح الحالي."),
   ).toBeTruthy();
 });
 
@@ -118,23 +118,19 @@ it("sends the clue with its card context", () => {
     roundNumber: 3,
     clue: "شاي دافئ",
     cardId: "core-7",
+    targetRevision: 0,
   });
   expect(store.getSnapshot().clueDraft).toBe("شاي دافئ");
 });
 
-it("confirms a skip with the score it charges and sends the card context", () => {
+it("no longer offers a way to skip the turn voluntarily", () => {
   const { send } = renderPsychic();
-  fireEvent.click(screen.getByRole("button", { name: "تخطي الدور (-1)" }));
-  expect(screen.getByText("سيتم خصم نقطة واحدة من رصيدك")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "تأكيد التخطي (-1)" }));
-  expect(send).toHaveBeenCalledWith("skip_round", {
-    roomCode: "AB12",
-    roundNumber: 3,
-    cardId: "core-7",
-  });
+  expect(screen.queryByRole("button", { name: /تخطي الدور/ })).toBeNull();
+  expect(screen.queryByText(/خصم نقطة واحدة/)).toBeNull();
+  expect(send).not.toHaveBeenCalledWith("skip_round", expect.anything());
 });
 
-it("names the team that pays for a skip in team mode", () => {
+it("keeps the answer-position control in the removed skip button's place", () => {
   renderPsychic({
     gameMode: "teams",
     teamCount: 2,
@@ -148,10 +144,15 @@ it("names the team that pays for a skip in team mode", () => {
       activeTeamId: "team-1",
       redrawAvailable: true,
       redrawUsed: false,
+      targetRedraw: { supported: true, remaining: 3, usedThisRound: false, revision: 0 },
     },
   });
-  fireEvent.click(screen.getByRole("button", { name: "تخطي الدور (-1)" }));
-  expect(screen.getByText("سيتم خصم نقطة واحدة من رصيد فريق النجوم")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /تخطي الدور/ })).toBeNull();
+  expect(screen.getByRole("button", { name: "تغيير مكان الإجابة" })).toBeTruthy();
+  expect(screen.getByText("للفريق: ٣ / ٣")).toBeTruthy();
+  expect(
+    screen.getByText("مرة واحدة في الدور، وبحد أقصى ٣ مرات لفريقك خلال المباراة."),
+  ).toBeTruthy();
 });
 
 it("re-enables replacement after a rejection so the player can retry", () => {
@@ -254,7 +255,7 @@ it("describes the psychic's options according to the turn's replacement state", 
   });
   // One explanation for the unavailable control, and no second copy in the status block.
   expect(
-    screen.getByText("تغيير البطاقة غير متاح الآن. يمكنك المتابعة أو تخطي الدور."),
+    screen.getByText("تغيير البطاقة غير متاح الآن. يمكنك المتابعة بالتلميح الحالي."),
   ).toBeTruthy();
   expect(screen.getByText("اكتب تلميحاً ثم أرسله قبل انتهاء الوقت")).toBeTruthy();
   cleanup();

@@ -12,6 +12,7 @@ import type {
   RevealData,
   RoundReadyState,
   ServerToClientEvents,
+  TargetRedrawState,
   TimerPhase,
 } from "@hint/contracts";
 
@@ -47,6 +48,11 @@ export interface RoundState {
    * an older server sent no reason, so the UI can explain the state without guessing.
    */
   redrawReason: RedrawReason | null;
+  /**
+   * The current turn's answer-position allowance. An older server omits it, and the client
+   * then reports the feature as unsupported instead of guessing why it is unavailable.
+   */
+  targetRedraw: TargetRedrawState;
 }
 export interface SessionState {
   playerId: string | null;
@@ -75,7 +81,13 @@ export interface SessionState {
   pendingJoinRequests: { requestId: string; displayName: string }[];
   /** Last rejected action, so a form can explain the refusal inline. */
   /** `teamId` correlates a rename rejection with the team it belongs to. */
-  actionError: { event: IncomingEvent; code: string; teamId?: string } | null;
+  actionError: {
+    event: IncomingEvent;
+    code: string;
+    teamId?: string;
+    /** Echoed by the server so a correlated action only reacts to its own rejection. */
+    requestId?: string;
+  } | null;
   /**
    * The last rename rejection per team, so a host editing two teams at once keeps each
    * answer on the card it belongs to. The newest rejection also stays in `actionError`.
@@ -94,6 +106,11 @@ export interface SessionState {
   preRevealScores: { id: string; score: number }[] | null;
   /** Increments on every authoritative round snapshot (round start, reconnect, watch). */
   authoritativeRound: number;
+  /**
+   * Increments only when a live `target_redrawn` event was applied, so the dial animates a
+   * confirmed move but never replays one that recovery restored.
+   */
+  targetMove: { roundNumber: number; revision: number; id: number } | null;
   finalState: FinalState | null;
   reaction: (Parameters<ServerToClientEvents["reaction_received"]>[0] & { id: number }) | null;
 }
@@ -106,6 +123,25 @@ export const emptyReady = (): RoundReadyState => ({
   paused: false,
   remainingMs: null,
 });
+/**
+ * A server that predates the feature sends no metadata, and "unsupported" is a different
+ * statement from "you have no uses left".
+ */
+export const unsupportedTargetRedraw = (): TargetRedrawState => ({
+  supported: false,
+  remaining: 0,
+  usedThisRound: false,
+  revision: 0,
+});
+export function normalizeTargetRedraw(value?: TargetRedrawState | null): TargetRedrawState {
+  if (!value || typeof value !== "object") return unsupportedTargetRedraw();
+  return {
+    supported: value.supported,
+    remaining: Number.isFinite(value.remaining) ? Math.max(0, Math.floor(value.remaining)) : 0,
+    usedThisRound: value.usedThisRound,
+    revision: Number.isFinite(value.revision) ? Math.max(0, Math.floor(value.revision)) : 0,
+  };
+}
 const emptyRound = (): RoundState => ({
   roundNumber: 0,
   psychicId: null,
@@ -123,6 +159,7 @@ const emptyRound = (): RoundState => ({
   redrawUsed: false,
   redrawAvailable: false,
   redrawReason: null,
+  targetRedraw: unsupportedTargetRedraw(),
 });
 export function initialSession(): SessionState {
   return {
@@ -162,6 +199,7 @@ export function initialSession(): SessionState {
     revealFresh: false,
     preRevealScores: null,
     authoritativeRound: 0,
+    targetMove: null,
     finalState: null,
     reaction: null,
   };
@@ -274,6 +312,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           event: action.data.event,
           code: action.data.code,
           ...(action.data.teamId === undefined ? {} : { teamId: action.data.teamId }),
+          ...(action.data.requestId === undefined ? {} : { requestId: action.data.requestId }),
         },
         // Every team keeps its own last rejection, so two open editors cannot swap answers.
         renameErrors:
@@ -433,8 +472,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           redrawUsed: data.redrawUsed,
           redrawAvailable: data.redrawAvailable,
           redrawReason: data.redrawReason ?? null,
+          targetRedraw: normalizeTargetRedraw(data.targetRedraw),
         },
         authoritativeRound: state.authoritativeRound + 1,
+        targetMove: null,
         readyState: emptyReady(),
         clueDraft: "",
         guessPending: false,
@@ -445,10 +486,46 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         currentScreen: playScreen({ ...state, awaitingNextRound: false }, data.psychicId),
       };
     }
-    case "target_reveal":
-      return state.playerId !== state.round.psychicId || state.isSpectator
-        ? state
-        : { ...state, round: { ...state.round, targetAngle: action.data.targetAngle } };
+    case "target_reveal": {
+      if (state.playerId !== state.round.psychicId || state.isSpectator) return state;
+      const suppliedRevision = action.data.targetRevision;
+      const revision = state.round.targetRedraw.revision;
+      // Context-bearing events are only applied to the turn they belong to, so a delayed
+      // initial target can never overwrite a position the player already changed.
+      if (
+        action.data.roundNumber !== undefined &&
+        action.data.roundNumber !== state.round.roundNumber
+      )
+        return state;
+      if (action.data.cardId !== undefined && action.data.cardId !== state.round.card?.id)
+        return state;
+      if (suppliedRevision !== undefined && suppliedRevision !== revision) return state;
+      if (suppliedRevision === undefined && revision > 0) return state;
+      if (suppliedRevision === undefined && state.round.targetAngle !== null) return state;
+      return { ...state, round: { ...state.round, targetAngle: action.data.targetAngle } };
+    }
+    case "target_redrawn": {
+      // Only the clue giver of this exact turn may apply the change, and only while the clue
+      // is still unsent. A duplicate or obsolete acknowledgement leaves newer state alone.
+      if (state.isSpectator || state.playerId !== state.round.psychicId) return state;
+      if (action.data.roundNumber !== state.round.roundNumber) return state;
+      if (action.data.cardId !== state.round.card?.id) return state;
+      if (state.round.clue || state.round.hasSubmitted) return state;
+      if (action.data.previousTargetRevision !== state.round.targetRedraw.revision) return state;
+      const targetRedraw = normalizeTargetRedraw(action.data.targetRedraw);
+      if (targetRedraw.revision !== action.data.previousTargetRevision + 1) return state;
+      return {
+        ...state,
+        round: { ...state.round, targetAngle: action.data.targetAngle, targetRedraw },
+        // The clue was written for the old position, so it is only cleared on real success.
+        clueDraft: "",
+        targetMove: {
+          roundNumber: action.data.roundNumber,
+          revision: targetRedraw.revision,
+          id: (state.targetMove?.id ?? 0) + 1,
+        },
+      };
+    }
     case "clue_broadcast":
       return { ...state, round: { ...state.round, clue: action.data.clue } };
     case "timer_start":
@@ -560,6 +637,12 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       // draft and pre-clue dial state belong to a card the turn no longer uses.
       const recoveredCardId = snapshot ? (snapshot.card?.id ?? null) : null;
       const sameCard = sameRound && recoveredCardId === (state.round.card?.id ?? null);
+      // A moved answer invalidates a draft even when the card is unchanged: the clue was
+      // written for a position the round no longer holds.
+      const recoveredRevision = snapshot
+        ? normalizeTargetRedraw(snapshot.targetRedraw).revision
+        : 0;
+      const samePosition = sameCard && recoveredRevision === state.round.targetRedraw.revision;
       const identity = {
         playerId: data.playerId,
         isSpectator: false,
@@ -596,6 +679,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
             redrawUsed: snapshot.redrawUsed,
             redrawAvailable: snapshot.redrawAvailable,
             redrawReason: snapshot.redrawReason ?? null,
+            targetRedraw: normalizeTargetRedraw(snapshot.targetRedraw),
           }
         : emptyRound();
       const ratingVotesByRound = sameRound ? { ...state.ratingVotesByRound } : {};
@@ -625,8 +709,9 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         revealFresh: false,
         authoritativeRound: state.authoritativeRound + 1,
         round,
-        clueDraft: sameCard ? state.clueDraft : "",
+        clueDraft: samePosition ? state.clueDraft : "",
         guessPending: false,
+        targetMove: null,
         pendingJoin: null,
         joinError: null,
         ratingVotesByRound,
@@ -665,11 +750,13 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
               redrawUsed: snapshot.redrawUsed,
               redrawAvailable: snapshot.redrawAvailable,
               redrawReason: snapshot.redrawReason ?? null,
+              targetRedraw: normalizeTargetRedraw(snapshot.targetRedraw),
             }
           : emptyRound(),
         revealData: snapshot?.revealData ?? null,
         revealFresh: false,
         authoritativeRound: state.authoritativeRound + 1,
+        targetMove: null,
         clueDraft: "",
         guessPending: false,
       };
