@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
+import { Dial } from "../src/ui/Dial";
 import { PlayScene, Reveal } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession } from "../src/session/store";
+import { playReveal, playScore } from "../src/session/audio";
 
 vi.mock("../src/session/audio", () => ({
   playReveal: vi.fn(),
@@ -65,14 +67,21 @@ function mount({
   playerId = "two",
   fresh = true,
   screen: currentScreen = "reveal",
-}: { playerId?: string; fresh?: boolean; screen?: string } = {}) {
+  result = "revealed",
+}: {
+  playerId?: string;
+  fresh?: boolean;
+  screen?: string;
+  /** `playing` mounts the scene mid-turn, before any result has arrived for it. */
+  result?: "revealed" | "playing";
+} = {}) {
   const store = createSessionStore({
     ...initialSession(),
     connection: "connected",
     playerId,
     currentScreen: currentScreen as never,
-    revealData: revealData(),
-    revealFresh: fresh,
+    revealData: result === "revealed" ? revealData() : null,
+    revealFresh: result === "revealed" && fresh,
     phase: "playing",
     round: { ...initialSession().round, roundNumber: 4, psychicId: "one" },
   });
@@ -280,4 +289,141 @@ it("keeps one dial mounted from the clue through the reveal and across a target 
   // The same dial instance carries the guess, the move and the reveal.
   expect(document.querySelector(".dial-svg")).toBe(dial);
   expect(screen.getByText(/أقرب إجابة/)).toBeTruthy();
+});
+
+it("starts a fresh reveal at stage zero on a scene that was already playing", () => {
+  vi.useFakeTimers();
+  const { store } = mount({ screen: "game-player", result: "playing" });
+  // The scene is mounted mid-turn: nothing of the result exists yet, and the dial is live.
+  const dial = document.querySelector(".dial-svg");
+  expect(dial).toBeTruthy();
+  expect(document.querySelector(".reveal-score-card")).toBeNull();
+
+  act(() => {
+    store.dispatch({ type: "server", event: "reveal_phase", data: revealData() });
+  });
+  const handoff = () => document.querySelector(".reveal-handoff");
+  // Stage zero: the same dial, the answer zone still hidden, no scores and no controls.
+  expect(document.querySelector(".dial-svg")).toBe(dial);
+  expect(classes(".dial-zones-reveal")).not.toContain("is-visible");
+  expect(document.querySelector('g[data-player-id="two"]')).toBeTruthy();
+  expect(document.querySelector('g[data-player-id="three"]')).toBeNull();
+  expect(classes(".reveal-closest")).not.toContain("is-visible");
+  expect(classes(".reveal-score-card")).not.toContain("is-visible");
+  expect(classes(".reveal-handoff")).not.toContain("is-visible");
+  expect(handoff()?.hasAttribute("inert")).toBe(true);
+  expect(handoff()?.getAttribute("aria-hidden")).toBe("true");
+  expect(playReveal).not.toHaveBeenCalled();
+  expect(playScore).not.toHaveBeenCalled();
+
+  // The stages still arrive on the shared timeline: the reset does not stall the sequence.
+  act(() => {
+    vi.advanceTimersByTime(180);
+  });
+  expect(playReveal).toHaveBeenCalledTimes(1);
+  expect(classes(".dial-zones-reveal")).toContain("is-visible");
+  expect(classes(".reveal-score-card")).not.toContain("is-visible");
+  act(() => {
+    vi.advanceTimersByTime(300);
+  });
+  expect(document.querySelector('g[data-player-id="three"]')).toBeTruthy();
+  act(() => {
+    vi.advanceTimersByTime(320);
+  });
+  expect(classes(".reveal-score-card")).toContain("is-visible");
+  expect(playScore).toHaveBeenCalledTimes(1);
+  expect(handoff()?.hasAttribute("inert")).toBe(true);
+  act(() => {
+    vi.advanceTimersByTime(400);
+  });
+  expect(classes(".reveal-handoff")).toContain("is-visible");
+  expect(handoff()?.hasAttribute("inert")).toBe(false);
+});
+
+it("keeps a duplicate reveal after recovery settled and never fresh again", () => {
+  vi.useFakeTimers();
+  const { store } = mount({ fresh: false });
+  // The player has already moved on to the final results and newer readiness has arrived.
+  act(() => {
+    store.dispatch({
+      type: "server",
+      event: "round_ready_updated",
+      data: {
+        playerIds: ["two"],
+        readyCount: 1,
+        requiredCount: 3,
+        endsAt: null,
+        paused: true,
+        remainingMs: 30_000,
+      },
+    });
+    store.dispatch({ type: "navigate", screen: "winner" });
+  });
+  // The mounted dial's initial settle runs once; afterwards nothing is waiting.
+  act(() => {
+    vi.advanceTimersByTime(0);
+  });
+  expect(vi.getTimerCount()).toBe(0);
+  const ready = store.getSnapshot().readyState;
+  const scores = store.getSnapshot().preRevealScores;
+
+  act(() => {
+    store.dispatch({ type: "server", event: "reveal_phase", data: revealData() });
+  });
+  const state = store.getSnapshot();
+  expect(state.revealFresh).toBe(false);
+  expect(state.currentScreen).toBe("winner");
+  expect(state.readyState).toEqual(ready);
+  expect(state.preRevealScores).toEqual(scores);
+  // A restored result is already settled, and a duplicate neither animates nor plays a cue.
+  expect(classes(".reveal-closest")).toContain("is-visible");
+  expect(classes(".reveal-score-card")).toContain("is-visible");
+  expect(classes(".reveal-handoff")).toContain("is-visible");
+  expect(playReveal).not.toHaveBeenCalled();
+  expect(playScore).not.toHaveBeenCalled();
+  // No stage timer was armed: a duplicate never restarts the sequence.
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("sweeps only for a newly confirmed move and settles immediately on recovery", () => {
+  vi.useFakeTimers();
+  const view = render(<Dial targetAngle={150} animateTarget moveToken={2} />);
+  expect(document.querySelector(".dial-zones-rotor")?.getAttribute("style")).toContain(
+    "rotate(60deg)",
+  );
+
+  // A rising token is a confirmed change: it sweeps, then pulses as it lands.
+  view.rerender(<Dial targetAngle={30} animateTarget moveToken={3} />);
+  act(() => {
+    vi.advanceTimersByTime(0);
+  });
+  expect(classes(".dial-zones-rotor")).toContain("is-moving");
+  expect(classes(".dial-zone-labels")).toContain("is-moving");
+  act(() => {
+    vi.advanceTimersByTime(450);
+  });
+  expect(classes(".dial-zones-rotor")).toContain("is-landing");
+  act(() => {
+    vi.advanceTimersByTime(150);
+  });
+  expect(classes(".dial-zones-rotor")).not.toContain("is-moving");
+  expect(classes(".dial-zones-rotor")).not.toContain("is-landing");
+
+  // Recovery drops the token back to zero and restores the authoritative position at once.
+  view.rerender(<Dial targetAngle={150} animateTarget moveToken={0} />);
+  act(() => {
+    vi.advanceTimersByTime(0);
+  });
+  expect(document.querySelector(".dial-zones-rotor")?.getAttribute("style")).toContain(
+    "rotate(60deg)",
+  );
+  expect(classes(".dial-zones-rotor")).not.toContain("is-moving");
+  expect(classes(".dial-zone-labels")).not.toContain("is-moving");
+  act(() => {
+    vi.advanceTimersByTime(1_000);
+  });
+  // No sweep, no hidden numbers and no landing pulse: the reset is not a move.
+  expect(classes(".dial-zones-rotor")).not.toContain("is-moving");
+  expect(classes(".dial-zones-rotor")).not.toContain("is-landing");
+  expect(classes(".dial-zone-labels")).not.toContain("is-moving");
 });

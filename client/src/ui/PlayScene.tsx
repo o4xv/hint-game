@@ -36,16 +36,20 @@ function prefersReducedMotion() {
 }
 
 /**
- * One staged reveal per round: a duplicate event for the same round never restarts it, and a
+ * One staged reveal per round. The stage is derived from the reveal the timers belong to rather
+ * than seeded from the first render, because the scene is mounted while the turn is still being
+ * played: entering a fresh reveal must start at stage zero before anything paints, while a
+ * duplicate delivery for the same reveal keeps whatever stage it had already reached and a
  * reveal that recovery restored opens settled. Every timer is cleared on unmount or a change.
  */
-function useRevealStage(animate: boolean) {
-  const [stage, setStage] = useState(animate ? 0 : SETTLED_STAGE);
+function useRevealStage(animate: boolean, revealToken: number) {
+  const [progress, setProgress] = useState<{ token: number; stage: number } | null>(null);
+  const stage = progress?.token === revealToken ? progress.stage : 0;
   useEffect(() => {
     if (!animate) return;
     if (prefersReducedMotion()) {
       const timer = window.setTimeout(() => {
-        setStage(SETTLED_STAGE);
+        setProgress({ token: revealToken, stage: SETTLED_STAGE });
       }, REVEAL_REDUCED_MOTION_MS);
       return () => {
         window.clearTimeout(timer);
@@ -53,13 +57,13 @@ function useRevealStage(animate: boolean) {
     }
     const timers = REVEAL_STAGE_TIMES.slice(1).map((delay, index) =>
       window.setTimeout(() => {
-        setStage(index + 1);
+        setProgress({ token: revealToken, stage: index + 1 });
       }, delay),
     );
     return () => {
       for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [animate]);
+  }, [animate, revealToken]);
   return animate ? stage : SETTLED_STAGE;
 }
 
@@ -126,7 +130,9 @@ export function PlayScene({ forcedPhase }: { forcedPhase?: Phase } = {}) {
     forcedPhase ??
     (screen === "reveal" ? "reveal" : screen === "game-psychic" ? "psychic" : "guesser");
   const guessing = useGuessingControls();
-  const stage = useRevealStage(phase === "reveal" && state.revealFresh);
+  // The round identifies the reveal these stages belong to, so a duplicate delivery for the
+  // same round keeps its progress instead of restarting the sequence.
+  const stage = useRevealStage(phase === "reveal" && state.revealFresh, state.round.roundNumber);
   const data = state.revealData;
   const bestScore = data ? Math.max(0, ...data.guesses.map((guess) => guess.points)) : null;
   const finished =
@@ -328,7 +334,7 @@ export function Reveal({ spectator = false }: { spectator?: boolean }) {
 /** A watched match shows the same reveal, with no controls of its own. */
 function SpectatorReveal() {
   const state = useSession((state) => state);
-  const stage = useRevealStage(state.revealFresh);
+  const stage = useRevealStage(state.revealFresh, state.round.roundNumber);
   const data = state.revealData;
   const bestScore = data ? Math.max(0, ...data.guesses.map((guess) => guess.points)) : null;
   const finished =

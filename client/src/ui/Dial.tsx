@@ -175,10 +175,21 @@ export const Dial = memo(function Dial({
   const lastPreview = useRef(-Infinity);
   const enabled = interactive && !locked;
   const shownAngle = enabled && drag ? drag.angle : angle;
-  // The first token a mounted dial sees is its starting position, never a move to animate.
+  // The first token a mounted dial sees is its starting position, never a move to animate, and
+  // only a rising token is a newly confirmed change. Recovery drops the token back to zero and
+  // restores the authoritative position: that cancels any pending phase instead of sweeping.
   useEffect(() => {
-    if (!animateTarget || moveToken === undefined || moveToken === seenMoveToken.current) return;
+    if (!animateTarget || moveToken === undefined) return;
+    const previousToken = seenMoveToken.current ?? 0;
     seenMoveToken.current = moveToken;
+    if (moveToken <= previousToken) {
+      const settle = setTimeout(() => {
+        setMovePhase("settled");
+      }, 0);
+      return () => {
+        clearTimeout(settle);
+      };
+    }
     // The phases run on their own timers, so the rotation itself is never re-rendered.
     const reduced = prefersReducedMotion();
     const timers = reduced

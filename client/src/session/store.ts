@@ -578,22 +578,33 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "reveal_phase": {
       const data = action.data;
       const finished = data.winners.length > 0 || data.winner !== null;
+      /**
+       * Only the first result the client sees for this turn is a live reveal. A delivery that
+       * arrives after recovery, or a duplicate of one already shown, stays settled: it must not
+       * replay the sequence, recapture the pre-reveal totals from the scored state, overwrite
+       * newer readiness or pull someone back from the final results.
+       */
+      const firstDelivery = state.revealData === null;
       // Capture the totals as they were before this reveal so the header can keep showing
       // them until the score stage instead of blanking out.
-      const previous = state.revealFresh
-        ? state.preRevealScores
-        : [
+      const previous = firstDelivery
+        ? [
             ...state.players.map((player) => ({ id: player.id, score: player.score })),
             ...state.teams.map((team) => ({ id: team.id, score: team.score })),
-          ];
+          ]
+        : state.preRevealScores;
       return {
         ...state,
         revealData: data,
-        revealFresh: true,
+        revealFresh: state.revealFresh || firstDelivery,
         preRevealScores: previous,
         phase: finished ? "finished" : "playing",
         guessPending: false,
-        readyState: finished ? emptyReady() : { ...emptyReady(), ...data.readyState },
+        readyState: finished
+          ? emptyReady()
+          : firstDelivery
+            ? { ...emptyReady(), ...data.readyState }
+            : state.readyState,
         players: state.players.map((player) => ({
           ...player,
           score:
@@ -601,13 +612,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
             player.score,
         })),
         teams: data.updatedTeams,
-        currentScreen: state.isSpectator
-          ? "spectator"
-          : state.awaitingNextRound
-            ? finished
-              ? "winner"
-              : "waiting-next-round"
-            : "reveal",
+        currentScreen: !firstDelivery
+          ? state.currentScreen
+          : state.isSpectator
+            ? "spectator"
+            : state.awaitingNextRound
+              ? finished
+                ? "winner"
+                : "waiting-next-round"
+              : "reveal",
         round: {
           ...state.round,
           timerEndsAt: null,
