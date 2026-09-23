@@ -950,9 +950,9 @@ g.is-dimmed {
  * group, so a confirmed change sweeps instead of redrawing paths every frame. The outer group
  * owns the reveal opacity and scale, the inner group only turns, and the numbers stay upright.
  */
-/* The dial's viewBox starts at (-12,-12), so its pivot at 190,190 is 202px from the corner. */
+/* SVG CSS transforms use the dial's user coordinates: the needle pivot is (190,190). */
 :root {
-  --dial-pivot-origin: 202px 202px;
+  --dial-pivot-origin: 190px 190px;
 }
 .dial-zones-reveal {
   opacity: 0;

@@ -19,6 +19,7 @@ export default tseslint.config(
       "e2e/playwright-report/**",
       "e2e/test-results/**",
       "client/public/**",
+      "docs/evidence/**",
     ],
   },
   js.configs.recommended,

@@ -63,6 +63,19 @@ function snapshot(page) {
   });
 }
 
+/** The scoring bands and number labels must share the dial's actual needle pivot. */
+function zonePivotOffset(page) {
+  return page.locator(".dial-zones-rotor").evaluate((element) => {
+    const svg = element.ownerSVGElement;
+    const point = svg.createSVGPoint();
+    point.x = 190;
+    point.y = 190;
+    const stationary = point.matrixTransform(svg.getScreenCTM());
+    const rotated = point.matrixTransform(element.getScreenCTM());
+    return Math.hypot(stationary.x - rotated.x, stationary.y - rotated.y);
+  });
+}
+
 /** Drags the dial so the needle lands on an exact angle, using the real pointer pipeline. */
 async function dragDialTo(page, angle, { release = true } = {}) {
   const point = await page.locator(".dial-svg").evaluate((svg, target) => {
@@ -117,6 +130,7 @@ test("an individual clue giver changes the answer position and the round still s
     await expect(psychic.getByRole("button", { name: "تغيير البطاقة" })).toBeEnabled();
     await expect(psychic.getByText("متبقي: 3 من 3")).toBeVisible();
     await expect(psychic.getByText("1 مجاني لكل دور")).toBeVisible();
+    expect(await zonePivotOffset(psychic)).toBeLessThan(1);
     expect(await guesser.evaluate(() => window.__hintTest.getState().round.targetAngle)).toBeNull();
 
     const spectator = await spectatorContext.newPage();
@@ -150,6 +164,8 @@ test("an individual clue giver changes the answer position and the round still s
     const rotation = Number(/rotate\((-?[\d.]+)deg\)/.exec(rotor ?? "")?.[1]);
     expect(Math.abs(rotation - (after.angle - 90))).toBeLessThan(0.01);
     await expect(psychic.locator(".dial-zones-rotor")).not.toHaveClass(/is-moving/);
+    await expect(psychic.locator(".dial-zone-labels")).toHaveCSS("opacity", "1");
+    expect(await zonePivotOffset(psychic)).toBeLessThan(1);
     // The scoring numbers stay upright instead of rotating with the bands.
     await expect(psychic.locator(".dial-zone-labels")).toHaveClass(/is-visible/);
     await expect(psychic.locator(".dial-zone-labels")).toHaveCSS("visibility", "visible");
