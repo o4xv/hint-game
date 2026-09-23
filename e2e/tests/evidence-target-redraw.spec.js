@@ -90,7 +90,8 @@ test("captures the controls, the movement and every reveal stage", async ({
   });
   const owner = await ownerContext.newPage();
   const guest = await guestContext.newPage();
-  const shot = (page, name) => page.screenshot({ path: resolve(directory, `${project}-${name}.png`) });
+  const shot = (page, name) =>
+    page.screenshot({ path: resolve(directory, `${project}-${name}.png`) });
   try {
     const roomCode = await createRoom(owner, "ريم");
     await joinRoom(guest, roomCode, "خالد");
@@ -100,8 +101,7 @@ test("captures the controls, the movement and every reveal stage", async ({
     await owner.getByRole("button", { name: "ابدأ اللعبة", exact: true }).click();
     await owner.waitForFunction(() => window.__hintTest.getState().round.roundNumber === 1);
     const ownerIsPsychic = await owner.evaluate(
-      () =>
-        window.__hintTest.getState().round.psychicId === window.__hintTest.getState().playerId,
+      () => window.__hintTest.getState().round.psychicId === window.__hintTest.getState().playerId,
     );
     const psychic = ownerIsPsychic ? owner : guest;
     const guesser = ownerIsPsychic ? guest : owner;
@@ -114,7 +114,9 @@ test("captures the controls, the movement and every reveal stage", async ({
     await psychic.getByRole("button", { name: "تغيير مكان الإجابة" }).click();
     await expect(psychic.locator(".dial-zones-rotor")).toHaveClass(/is-moving/, { timeout: 3000 });
     await shot(psychic, "02-position-moving");
-    await psychic.waitForFunction(() => window.__hintTest.getState().round.targetRedraw.revision === 1);
+    await psychic.waitForFunction(
+      () => window.__hintTest.getState().round.targetRedraw.revision === 1,
+    );
     await expect(psychic.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeVisible();
     await shot(psychic, "03-position-landed-and-used");
     const target = await psychic.evaluate(() => window.__hintTest.getState().round.targetAngle);
@@ -164,7 +166,8 @@ test("captures the team allowance and the exhausted state", async ({ browser }, 
     ),
   );
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
-  const shot = (page, name) => page.screenshot({ path: resolve(directory, `${project}-${name}.png`) });
+  const shot = (page, name) =>
+    page.screenshot({ path: resolve(directory, `${project}-${name}.png`) });
   try {
     const roomCode = await createRoom(pages[0], "ريم");
     await joinRoom(pages[1], roomCode, "خالد");
@@ -197,7 +200,8 @@ test("captures the team allowance and the exhausted state", async ({ browser }, 
         ),
       );
       const psychicPage = pages[states.findIndex((state) => state.psychicId === state.playerId)];
-      const controllerPage = pages[states.findIndex((state) => state.controllerId === state.playerId)];
+      const controllerPage =
+        pages[states.findIndex((state) => state.controllerId === state.playerId)];
       if (round === 1) await shot(psychicPage, "11-team-allowance");
       await psychicPage.getByRole("button", { name: "تغيير مكان الإجابة" }).click();
       await psychicPage.waitForFunction(
