@@ -20,6 +20,8 @@ async function enterHome(page) {
   await page.addInitScript(suppressCoaching);
   await page.goto("/");
   await page.waitForFunction(() => window.__hintTest?.socket.connected);
+  // Creating a room needs the server, not only the socket: wait for its readiness probe too.
+  await page.waitForFunction(() => window.__hintTest?.serverReadiness.getStatus() === "ready");
   await page.getByRole("button", { name: "ابدأ اللعبة" }).click();
   await expect(page.getByLabel("اسم اللاعب")).toBeVisible();
 }
@@ -164,6 +166,25 @@ test("an individual clue giver changes the answer position and the round still s
     await dragDialTo(guesser, after.angle);
     await guesser.getByRole("button", { name: "تأكيد الإجابة" }).click();
     await expect(guesser.locator(".reveal-screen")).toBeVisible();
+    /**
+     * The frame the reveal paints must still be stage zero. This is read once instead of
+     * asserted with a retrying matcher: the regression this guards against corrects itself
+     * when the first timer moves the stage, so only the first paint can prove it. The answer
+     * zone itself is read for the failure output but not asserted: a slow engine may already
+     * have crossed the 180ms zone stage by the time Playwright reads the DOM, which is not a
+     * defect, while the later stages have hundreds of milliseconds of margin.
+     */
+    const firstFrame = await guesser.evaluate(() => ({
+      zones: Boolean(document.querySelector(".dial-zones-reveal.is-visible")),
+      closest: Boolean(document.querySelector(".reveal-closest.is-visible")),
+      score: Boolean(document.querySelector(".reveal-score-card.is-visible")),
+      handoffInert: document.querySelector(".reveal-handoff")?.hasAttribute("inert") ?? null,
+      otherNeedles: document.querySelectorAll("g[data-player-id]").length > 1,
+    }));
+    expect(firstFrame.closest, JSON.stringify(firstFrame)).toBe(false);
+    expect(firstFrame.score, JSON.stringify(firstFrame)).toBe(false);
+    expect(firstFrame.handoffInert, JSON.stringify(firstFrame)).toBe(true);
+    expect(firstFrame.otherNeedles, JSON.stringify(firstFrame)).toBe(false);
     const stageAfter = await guesser.locator(".dial-stage").boundingBox();
     const dialAfter = await guesser.locator(".dial-svg").boundingBox();
     expect(Math.abs(stageAfter.y - stageBefore.y)).toBeLessThanOrEqual(1);
@@ -171,12 +192,115 @@ test("an individual clue giver changes the answer position and the round still s
     expect(Math.abs(dialAfter.width - dialBefore.width)).toBeLessThanOrEqual(1);
 
     await expect(guesser.locator(".reveal-score-card")).toContainText("+3");
+    // The stages then arrive in order, each one only after the previous one is on screen.
+    // Their exact spacing is asserted deterministically in the client unit tests, because a
+    // background tab has its own timers throttled by the browser.
+    await expect(guesser.locator(".dial-zones-reveal")).toHaveClass(/is-visible/);
+    await expect(guesser.locator(".reveal-score-card")).toHaveClass(/is-visible/);
+    await expect(guesser.locator(".reveal-handoff")).not.toHaveAttribute("inert", "");
     const scored = await snapshot(guesser);
     expect(scored.scores.some((player) => player.score > 0)).toBe(true);
   } finally {
     await ownerContext.close();
     await guestContext.close();
     await spectatorContext.close();
+  }
+});
+
+test("a reconnected reveal opens settled without replaying the move or the sequence", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const ownerContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const owner = await ownerContext.newPage();
+  const guest = await guestContext.newPage();
+  try {
+    const roomCode = await createRoom(owner, "ريم");
+    await joinRoom(guest, roomCode, "خالد");
+    await owner.getByRole("button", { name: "ابدأ اللعبة", exact: true }).click();
+    await owner.waitForFunction(() => window.__hintTest.getState().round.roundNumber === 1);
+    const ownerIsPsychic = await owner.evaluate(
+      () => window.__hintTest.getState().round.psychicId === window.__hintTest.getState().playerId,
+    );
+    const psychic = ownerIsPsychic ? owner : guest;
+    const guesser = ownerIsPsychic ? guest : owner;
+
+    // Move the position, then play the turn out so the round is revealed.
+    await psychic.getByRole("button", { name: "تغيير مكان الإجابة" }).click();
+    await psychic.waitForFunction(
+      () => window.__hintTest.getState().round.targetRedraw.revision === 1,
+    );
+    const target = await psychic.evaluate(() => window.__hintTest.getState().round.targetAngle);
+    await psychic.getByLabel("التلميح").fill("تلميح للموضع الجديد");
+    await psychic.getByRole("button", { name: "أرسل التلميح" }).click();
+    await guesser.waitForFunction(() => window.__hintTest.getState().round.clue !== null);
+    await dragDialTo(guesser, target);
+    await guesser.getByRole("button", { name: "تأكيد الإجابة" }).click();
+    await expect(guesser.locator(".reveal-score-card")).toHaveClass(/is-visible/);
+    await expect(psychic.locator(".reveal-score-card")).toHaveClass(/is-visible/);
+
+    /**
+     * The clue giver's own page still holds the confirmed move, so its dial must keep the
+     * authoritative angle without another sweep, without hiding the numbers and without a
+     * landing pulse while the connection is restored.
+     */
+    const dialState = () =>
+      psychic.evaluate(() => {
+        const rotor = document.querySelector(".dial-zones-rotor");
+        const labels = document.querySelector(".dial-zone-labels");
+        return {
+          style: rotor?.getAttribute("style") ?? null,
+          moving: Boolean(rotor?.classList.contains("is-moving")),
+          landing: Boolean(rotor?.classList.contains("is-landing")),
+          labelsMoving: Boolean(labels?.classList.contains("is-moving")),
+          scoreVisible: Boolean(document.querySelector(".reveal-score-card.is-visible")),
+        };
+      });
+
+    // A reconnect on the open page must not replay the move or restart the settled sequence.
+    await psychic.evaluate(() => {
+      window.__hintTest.socket.disconnect();
+      window.__hintTest.socket.connect();
+    });
+    await psychic.waitForFunction(
+      () =>
+        window.__hintTest?.getState().connection === "connected" &&
+        window.__hintTest.getState().authoritativeRound > 0,
+    );
+    const rotation = Number(
+      /rotate\((-?[\d.]+)deg\)/.exec(
+        (await psychic.locator(".dial-zones-rotor").getAttribute("style")) ?? "",
+      )?.[1],
+    );
+    expect(Math.abs(rotation - (target - 90))).toBeLessThan(0.01);
+    await expect(psychic.locator(".reveal-score-card")).toHaveClass(/is-visible/);
+    expect(await psychic.evaluate(() => window.__hintTest.getState().revealFresh)).toBe(false);
+    // Sampled for well over one settle: the position may never move, blink or pulse again.
+    const samples = [];
+    for (let index = 0; index < 20; index += 1) {
+      samples.push(await dialState());
+      await psychic.waitForTimeout(100);
+    }
+    expect(new Set(samples.map((sample) => sample.style)).size).toBe(1);
+    expect(samples.filter((sample) => sample.moving)).toEqual([]);
+    expect(samples.filter((sample) => sample.landing)).toEqual([]);
+    expect(samples.filter((sample) => sample.labelsMoving)).toEqual([]);
+    expect(samples.filter((sample) => !sample.scoreVisible)).toEqual([]);
+
+    // A reload restores the same settled result on the other page.
+    await guesser.reload();
+    await guesser.waitForFunction(
+      () =>
+        window.__hintTest?.getState().connection === "connected" &&
+        window.__hintTest.getState().revealData !== null,
+    );
+    await expect(guesser.locator(".reveal-score-card")).toHaveClass(/is-visible/);
+    await expect(guesser.locator(".reveal-handoff")).toHaveClass(/is-visible/);
+    expect(await guesser.evaluate(() => window.__hintTest.getState().revealFresh)).toBe(false);
+  } finally {
+    await ownerContext.close();
+    await guestContext.close();
   }
 });
 
