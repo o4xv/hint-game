@@ -4,7 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import type { ClientToServerEvents, ServerToClientEvents } from "@hint/contracts";
 import { inject } from "@vercel/analytics";
 import { createSessionStore, initialSession } from "./session/store";
-import { readSession, attachSessionPersistence } from "./session/storage";
+import { restoreSession, attachSessionPersistence } from "./session/storage";
 import { createSessionController } from "./session/controller";
 import { createSocketTransport } from "./session/transport";
 import { createServerReadiness } from "./session/readiness";
@@ -49,16 +49,21 @@ try {
 } catch {
   /* Playing still works without persistent storage. */
 }
-const saved = storage ? readSession(storage) : null;
+const restored = storage ? restoreSession(storage) : { session: null, staleRoomCode: null };
+const saved = restored.session;
 const watch = /^\/watch\/([A-Za-z0-9]{4})\/?$/.exec(window.location.pathname)?.[1]?.toUpperCase();
+const roomRoute = /^\/room\/([A-Za-z0-9]{4})\/?$/
+  .exec(window.location.pathname)?.[1]
+  ?.toUpperCase();
+const staleRoomRoute = Boolean(roomRoute && roomRoute === restored.staleRoomCode);
+if (staleRoomRoute) window.history.replaceState({}, "", "/");
 const route =
-  /^\/room\/([A-Za-z0-9]{4})\/?$/.exec(window.location.pathname)?.[1] ??
-  new URLSearchParams(window.location.search).get("join");
+  (staleRoomRoute ? null : roomRoute) ?? new URLSearchParams(window.location.search).get("join");
 const joinCode = route && /^[A-Za-z0-9]{4}$/.test(route) ? route.toUpperCase() : null;
 const store = createSessionStore({
   ...initialSession(),
   ...(watch ? { roomCode: watch, isSpectator: true } : (saved ?? {})),
-  joinCode,
+  joinCode: saved ? null : joinCode,
   currentScreen: watch ? "spectator" : saved ? "lobby" : joinCode ? "home" : "landing",
 });
 const readiness = createServerReadiness({
@@ -134,8 +139,17 @@ const runtime: GameRuntime = {
 };
 
 const releaseSessionPersistence = storage ? attachSessionPersistence(store, storage) : null;
-const releasePersistence = store.subscribe(() => {
+let previousRoomCode = store.getSnapshot().roomCode;
+const releasePersistence = store.subscribe((action) => {
   const state = store.getSnapshot();
+  if (
+    action.type === "reset" &&
+    previousRoomCode &&
+    window.location.pathname.startsWith("/room/")
+  ) {
+    window.history.replaceState({}, "", "/");
+  }
+  previousRoomCode = state.roomCode;
   if (state.roomCode && state.currentScreen !== "home" && state.currentScreen !== "landing") {
     const path = `/${state.isSpectator ? "watch" : "room"}/${state.roomCode}`;
     if (window.location.pathname !== path) window.history.replaceState({}, "", path);

@@ -145,31 +145,30 @@ export function PlayScene({ forcedPhase }: { forcedPhase?: Phase } = {}) {
   const teamsMode = state.gameMode === "teams";
   const myTeam = state.round.activeTeamId;
   const moveToken = state.targetMove?.id ?? 0;
-  /**
-   * The dial's slot is measured while the turn is still being played, then pinned for the
-   * reveal so the results below it can grow the page instead of shrinking the dial area.
-   */
+  /** Keep the first reveal frame in the played position, then make room for the scores. */
   const stageRef = useRef<HTMLDivElement>(null);
   const playedStageHeight = useRef<number | null>(null);
   /*
-   * The dial's slot is measured while the turn is still being played and pinned imperatively
-   * for the reveal, so the results below can grow the page instead of shrinking the dial area.
-   * A layout effect writes the style before paint, which a React state update could not do
-   * without an extra frame.
+   * Pin the played slot for the first reveal frames. When scores arrive, shrink only the empty
+   * part of that slot. The dial stays mounted and its move is eased by the height transition;
+   * recovered reveals start compact because there is no played slot to preserve.
    */
   useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
+    const element = stageRef.current;
+    if (!element) return;
     if (phase !== "reveal") {
-      playedStageHeight.current = stage.getBoundingClientRect().height;
-      stage.style.removeProperty("height");
-      stage.style.removeProperty("flex");
+      playedStageHeight.current = element.getBoundingClientRect().height;
+      element.style.removeProperty("height");
+      element.style.removeProperty("flex");
       return;
     }
     const height = playedStageHeight.current;
-    if (height) {
-      stage.style.height = `${height}px`;
-      stage.style.flex = "none";
+    if (height && stage < SCORE_STAGE) {
+      element.style.height = `${height}px`;
+      element.style.flex = "none";
+    } else if (height) {
+      const dialHeight = element.querySelector(".dial-svg")?.getBoundingClientRect().height;
+      if (dialHeight) element.style.height = `${Math.ceil(dialHeight) + 8}px`;
     }
   });
   useEffect(() => {

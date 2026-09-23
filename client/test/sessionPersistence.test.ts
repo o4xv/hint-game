@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { attachSessionPersistence, readSession, writeSession } from "../src/session/storage";
 import { createSessionStore, initialSession } from "../src/session/store";
 
@@ -94,4 +94,22 @@ it("clears this player's credentials on reset but preserves a newer player's ses
   oldTab.dispatch({ type: "reset" });
   expect(readSession(storage)).toEqual(newer);
   stopOld();
+});
+
+it("keeps a quiet connected match recent but lets an absent session expire", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-23T12:00:00Z"));
+  const storage = fixture();
+  const store = createSessionStore({ ...initialSession(), ...saved, connection: "connected" });
+  const stop = attachSessionPersistence(store, storage);
+  try {
+    vi.advanceTimersByTime(25 * 60_000);
+    expect(readSession(storage)).toEqual(saved);
+    store.dispatch({ type: "connection", status: "offline" });
+    vi.advanceTimersByTime(31 * 60_000);
+    expect(readSession(storage)).toBeNull();
+  } finally {
+    stop();
+    vi.useRealTimers();
+  }
 });

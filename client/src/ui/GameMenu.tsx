@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSession, useGame } from "./GameContext";
 import { Dialog } from "./Dialog";
 import { HelpPanel } from "./Tutorial";
@@ -15,6 +15,14 @@ const GameMenuContext = createContext<{ open: (panel: GamePanel) => void } | nul
  */
 export function GameMenuProvider({ children }: { children: ReactNode }) {
   const [panel, setPanel] = useState<GamePanel | null>(null);
+  const { store } = useGame();
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        if (!store.getSnapshot().roomCode) setPanel(null);
+      }),
+    [store],
+  );
   return (
     <GameMenuContext.Provider value={{ open: setPanel }}>
       {children}
@@ -143,7 +151,14 @@ export function GameDialog({
       {panel === "leave" && (
         <>
           <p>هل تريد مغادرة المباراة؟</p>
-          <button type="button" className="btn btn-primary" onClick={leave}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              onClose();
+              leave();
+            }}
+          >
             مغادرة
           </button>
           <button
