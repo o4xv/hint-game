@@ -8,27 +8,26 @@
 
 ## How it works
 
-A card gives you two ends of a spectrum, such as **cold ↔ hot**.
-One player—the clue giver—sees a secret target and gives a clue.
-Everyone else guesses where that clue belongs by moving a needle.
+**The card** is a pair of opposites. In the round below it reads **رخيص ↔ غالي** (*cheap ↔ expensive*). Omar is the clue giver: only he sees the colored target on the dial. He types **حذاء** (*shoe*) as his **clue**, hoping the others will picture a shoe at roughly the same price point. Before sending it, he can change the card once this turn or move the target to a different position, with up to three target changes per match.
 
-For example, **“hot tea”** suggests a position toward the hot end.
-Reveal the target: the closer the guess, the more points it earns.
+**The guess:** Khaled and Sami see the card and Omar's clue, but not the target. Each moves his needle to the price he imagines.
+
+**The reveal:** The target and both guesses appear on the dial. The colored bands show how close each guess landed; the table shows points for the round and the running totals.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/clue.png" alt="The clue giver sees a secret target on the dial" width="240"></td>
-    <td align="center"><img src="docs/images/guess.png" alt="A player moves the needle using the clue, with the target hidden" width="240"></td>
-    <td align="center"><img src="docs/images/reveal.png" alt="The round reveal shows guesses and their scores" width="240"></td>
+    <td align="center"><img src="docs/images/clue.png" alt="Omar sees the cheap versus expensive card, a private target, his shoe clue, and the two change buttons" width="240"></td>
+    <td align="center"><img src="docs/images/guess.png" alt="A player sees the shoe clue and cheap versus expensive card while aiming a needle without seeing the target" width="240"></td>
+    <td align="center"><img src="docs/images/reveal.png" alt="The target, two guesses, and round scores for Omar, Khaled, and Sami" width="240"></td>
   </tr>
   <tr>
-    <td align="center"><strong>1. Give a clue</strong></td>
-    <td align="center"><strong>2. Make a guess</strong></td>
-    <td align="center"><strong>3. Reveal the target</strong></td>
+    <td align="center"><strong>1. Card and clue</strong></td>
+    <td align="center"><strong>2. Guess from the clue</strong></td>
+    <td align="center"><strong>3. Reveal and score</strong></td>
   </tr>
 </table>
 
-_Screenshots from a local demo with fictional players. The game interface is in Arabic._
+_Screenshots from one local demo round with fictional players. The game interface is in Arabic._
 
 ## Features
 
@@ -37,9 +36,18 @@ _Screenshots from a local demo with fictional players. The game interface is in 
 - **Learn by playing:** an interactive walkthrough and practice rounds.
 - **Made for phones:** Arabic right-to-left layout, touch controls, and an installable PWA.
 - **Stay in the game:** reconnect to your seat, watch as a spectator, and vote for a rematch.
-- **155 cards** across three packs, with one free card change before giving a clue.
+- **155 cards** across three packs, with one free card change per turn and up to three answer-position changes per match.
+- **Animated reveals** bring the target, guesses, and scores onto the same dial.
 
 Multiplayer needs a connection. After an online visit, the cached app also supports offline practice.
+
+## Possible next steps
+
+These are ideas for future versions, not announced features or a release schedule:
+
+- More curated Arabic cards and themed packs.
+- More ways to customize matches, especially for teams and larger groups.
+- A richer end-of-game recap and continued polish for phones and accessibility.
 
 ## Built with
 
