@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
-import { Reveal } from "../src/ui/Results";
+import { Reveal } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession, type SessionState } from "../src/session/store";
 
 afterEach(() => {

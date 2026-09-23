@@ -4,7 +4,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import type { ReconnectSuccessPayload, RevealData } from "@hint/contracts";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
-import { Reveal } from "../src/ui/Results";
+import { Reveal } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession } from "../src/session/store";
 
 vi.mock("../src/session/audio", () => ({

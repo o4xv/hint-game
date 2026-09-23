@@ -1,52 +1,14 @@
 import type { RevealData } from "@hint/contracts";
 import { useEffect, useState, type CSSProperties } from "react";
-import { playReveal, playScore, playWinner } from "../session/audio";
+import { playWinner } from "../session/audio";
 import { useGame, useSession } from "./GameContext";
-import { Countdown, GameHeader, Spectrum } from "./Game";
-import { Dial } from "./Dial";
+import { Countdown, GameHeader } from "./Game";
 import { ConnectionStatus } from "./Entry";
-import { RoundStatus } from "./RoundStatus";
 
-/**
- * One staged reveal per round: needles, then the closest answer, then round points and
- * totals, settled before a second. Reduced motion collapses the timing and drops the
- * movement, and restored results open settled.
- */
-const REVEAL_STAGE_TIMES = [0, 280, 520, 950] as const;
-const REVEAL_SETTLED = REVEAL_STAGE_TIMES.length - 1;
-const REVEAL_REDUCED_MOTION_MS = 150;
-
-function prefersReducedMotion() {
-  return (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-function useRevealStage(roundNumber: number, animate: boolean) {
-  const [stage, setStage] = useState(animate ? 0 : REVEAL_SETTLED);
-  // Deps are the round and its freshness, so a duplicate reveal for the same round never
-  // restarts the sequence. StrictMode's second pass reschedules after the first cleanup.
-  useEffect(() => {
-    if (!animate) return;
-    const reduced = prefersReducedMotion();
-    const timers = REVEAL_STAGE_TIMES.slice(1).map((delay, index) =>
-      window.setTimeout(
-        () => {
-          setStage(index + 1);
-        },
-        reduced ? REVEAL_REDUCED_MOTION_MS : delay,
-      ),
-    );
-    return () => {
-      for (const timer of timers) window.clearTimeout(timer);
-    };
-  }, [animate, roundNumber]);
-  // Recovery can turn a live reveal into a restored one while this component stays
-  // mounted: the sequence must then settle immediately instead of waiting for stages
-  // whose timers were cancelled.
-  return animate ? stage : REVEAL_SETTLED;
-}
+/** Stage indexes shared with the scene that owns the timeline. */
+const SCORE_STAGE = 3;
+const CONTROL_STAGE = 4;
+const SETTLED_STAGE = 5;
 
 function RoundScores({
   data,
@@ -80,9 +42,11 @@ function RoundScores({
   const breakdown = data.psychicBreakdown;
   return (
     <section
-      className={`card reveal-score-card reveal-stage${stage >= 2 ? " is-visible" : ""}`}
+      className={`card reveal-score-card reveal-stage${stage >= SCORE_STAGE ? " is-visible" : ""}`}
       aria-label="نقاط الجولة والمجموع"
       tabIndex={0}
+      // A stage that has not arrived yet must be unreachable for keyboard and assistive tech.
+      inert={stage < SCORE_STAGE}
     >
       <div className="reveal-score-row reveal-score-header">
         <span>{data.gameMode === "teams" ? "الفريق" : "اللاعب"}</span>
@@ -140,50 +104,27 @@ function RoundScores({
   );
 }
 
-export function Reveal({ spectator = false }: { spectator?: boolean }) {
+/**
+ * Everything below the dial on a result screen. The scene above owns the header, the clue
+ * line and the dial itself, so the answer zone never jumps between the two phases.
+ */
+export function RevealResults({
+  stage,
+  spectator = false,
+  selectedId,
+  onSelect,
+}: {
+  stage: number;
+  spectator?: boolean;
+  selectedId: string | null;
+  onSelect: (playerId: string | null) => void;
+}) {
   const { store, controller } = useGame();
   const state = useSession((state) => state);
   const data = state.revealData;
-  const bestScore = data ? Math.max(0, ...data.guesses.map((guess) => guess.points)) : null;
   const finished =
     state.phase === "finished" || (data?.winners.length ?? 0) > 0 || data?.winner !== null;
-  const stage = useRevealStage(state.round.roundNumber, state.revealFresh);
-  const myGuess = data?.guesses.find((guess) => guess.playerId === state.playerId);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    myGuess && myGuess.angle !== null ? (state.playerId ?? null) : null,
-  );
-  useEffect(() => {
-    if (!state.revealFresh || bestScore === null) return;
-    // Sounds follow the same clock as the visuals: with reduced motion the stages collapse,
-    // so the score and winner cues move with them instead of arriving late.
-    const reduced = prefersReducedMotion();
-    const scoreDelay = reduced ? REVEAL_REDUCED_MOTION_MS : REVEAL_STAGE_TIMES[2];
-    const winnerDelay = reduced ? REVEAL_REDUCED_MOTION_MS : REVEAL_STAGE_TIMES[REVEAL_SETTLED];
-    // Scheduled rather than called directly so StrictMode's first pass is cancelled.
-    const revealTimer = setTimeout(() => {
-      playReveal();
-    }, 0);
-    const scoreTimer = setTimeout(() => {
-      playScore(bestScore);
-    }, scoreDelay);
-    const winnerTimer = finished
-      ? setTimeout(() => {
-          playWinner();
-        }, winnerDelay)
-      : undefined;
-    return () => {
-      clearTimeout(revealTimer);
-      clearTimeout(scoreTimer);
-      if (winnerTimer !== undefined) clearTimeout(winnerTimer);
-    };
-  }, [bestScore, finished, state.revealFresh, state.round.roundNumber]);
-  if (!data)
-    return (
-      <main className="screen">
-        <h1>جارٍ استعادة نتيجة الجولة…</h1>
-        <ConnectionStatus />
-      </main>
-    );
+  if (!data) return null;
   const ready = state.readyState;
   const myReady = state.playerId !== null && ready.playerIds.includes(state.playerId);
   const roomCode = state.roomCode;
@@ -193,25 +134,16 @@ export function Reveal({ spectator = false }: { spectator?: boolean }) {
   const distance = Math.min(...valid.map((guess) => Math.abs(guess.angle - data.targetAngle)));
   const closest = valid.filter((guess) => Math.abs(guess.angle - data.targetAngle) === distance);
   return (
-    <main className="screen game game-shell reveal-screen" aria-label="نتيجة الجولة">
-      <h1 className="sr-only">نتيجة الجولة</h1>
-      <GameHeader holdScores={stage < 2} />
-      {spectator && <p>ظهرت النتيجة</p>}
-      <p className="reveal-clue">
-        {state.players.find((player) => player.id === state.round.psychicId)?.displayName ??
-          "الوسيط"}
-        : {state.round.clue}
-      </p>
-      <Spectrum />
-      <div className="dial-stage reveal-dial-stage">
-        <Dial
-          targetAngle={data.targetAngle}
-          guesses={data.guesses}
-          playerId={state.playerId}
-          highlightPlayerId={selectedId}
-        />
-      </div>
-      <p className={`reveal-closest reveal-stage${stage >= 1 ? " is-visible" : ""}`}>
+    <>
+      {/* Only the clue giver lost the line above the dial, so their clue is repeated here. */}
+      {state.playerId !== null &&
+        state.playerId === state.round.psychicId &&
+        state.round.clue !== null && (
+          <p className="reveal-clue reveal-stage is-visible">
+            {state.displayName ?? "الوسيط"}: {state.round.clue}
+          </p>
+        )}
+      <p className={`reveal-closest reveal-stage${stage >= SCORE_STAGE ? " is-visible" : ""}`}>
         {closest.length
           ? `أقرب إجابة: ${closest.map((guess) => guess.displayName).join(" و ")}`
           : "لم تُسجّل إجابة هذه الجولة"}
@@ -221,14 +153,19 @@ export function Reveal({ spectator = false }: { spectator?: boolean }) {
           type="button"
           className="btn btn-ghost reveal-show-all"
           onClick={() => {
-            setSelectedId(null);
+            onSelect(null);
           }}
         >
           عرض كل الإجابات
         </button>
       )}
-      <RoundScores data={data} selectedId={selectedId} onSelect={setSelectedId} stage={stage} />
-      <section className="reveal-handoff">
+      <RoundScores data={data} selectedId={selectedId} onSelect={onSelect} stage={stage} />
+      <section
+        className={`reveal-handoff reveal-stage${stage >= CONTROL_STAGE ? " is-visible" : ""}`}
+        // The controls only accept input once the sequence has settled.
+        inert={stage < SETTLED_STAGE}
+        aria-hidden={stage < CONTROL_STAGE ? true : undefined}
+      >
         {finished ? (
           <>
             {spectator && <p>انتهت المباراة</p>}
@@ -300,8 +237,7 @@ export function Reveal({ spectator = false }: { spectator?: boolean }) {
           </>
         )}
       </section>
-      <ConnectionStatus />
-    </main>
+    </>
   );
 }
 
@@ -464,37 +400,6 @@ export function Winner({ spectator = false }: { spectator?: boolean }) {
           غرفة جديدة
         </button>
       </div>
-      <ConnectionStatus />
-    </main>
-  );
-}
-
-export function Spectator() {
-  const state = useSession((state) => state);
-  // A won match still shows its deciding reveal first; a restored finished match opens the
-  // standings directly because it has no live reveal to stage.
-  if (state.revealData) return <Reveal spectator />;
-  if (state.phase === "finished") return <Winner spectator />;
-  return (
-    <main className="screen game game-shell spectator-screen">
-      <h1>شاشة العرض</h1>
-      <GameHeader />
-      <RoundStatus role="spectate" />
-      {state.phase === "waiting" ? (
-        <p>بانتظار بدء المباراة…</p>
-      ) : (
-        <>
-          <Spectrum />
-          <section className="card round-clue-card">
-            <span>التلميح</span>
-            <p>{state.round.clue ?? "بانتظار تلميح الوسيط…"}</p>
-          </section>
-          <div className="dial-stage">
-            <Dial angle={state.round.previewAngle} />
-          </div>
-          <p>شاهد الجولة وناقش التلميح — لا توجد أدوات لإرسال إجابة هنا.</p>
-        </>
-      )}
       <ConnectionStatus />
     </main>
   );

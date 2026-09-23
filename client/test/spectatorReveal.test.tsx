@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { RevealData } from "@hint/contracts";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
-import { Spectator } from "../src/ui/Results";
+import { Spectator } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession, type SessionState } from "../src/session/store";
 
 vi.mock("../src/session/audio", () => ({

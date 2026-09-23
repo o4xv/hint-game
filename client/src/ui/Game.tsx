@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame, useSession } from "./GameContext";
-import { Dial } from "./Dial";
+import { TARGET_REDRAWS_PER_MATCH } from "@hint/contracts";
 import { Dialog } from "./Dialog";
 import { useGameMenu } from "./GameMenu";
-import { RoundStatus, type RoundRole } from "./RoundStatus";
-import { ConnectionStatus } from "./Entry";
-import { playTick } from "../session/audio";
+import type { RoundRole } from "./RoundStatus";
 
 export function Countdown({
   endsAt,
@@ -199,7 +197,11 @@ export function Coach({ role }: { role: keyof typeof guidance }) {
   );
 }
 
-export function Guessing() {
+/**
+ * The guessing controls live above the shared dial, so this hook owns the draft ref, the
+ * timed auto-submit and the role wording while the scene owns the stable dial element.
+ */
+export function useGuessingControls() {
   const { store, controller } = useGame();
   const state = useSession((state) => state);
   const guess = useRef(state.round.myAngle);
@@ -277,66 +279,67 @@ export function Guessing() {
       ...(state.round.card ? { cardId: state.round.card.id } : {}),
     });
   }
+  /** The dial reports a live drag here; the ref keeps one pointer move from re-rendering. */
+  function setDraft(angle: number) {
+    guess.current = angle;
+  }
+  return { state, canControl, roundRole, locked, canSubmit, submit, teamsMode: teamMode, setDraft };
+}
+
+export function GuessingActions({
+  canControl,
+  canSubmit,
+  submit,
+}: {
+  canControl: boolean;
+  canSubmit: boolean;
+  submit: () => void;
+}) {
+  const state = useSession((state) => state);
   return (
-    <main className="screen game game-shell">
-      <h1 className="sr-only">تخمين الإجابة</h1>
-      <GameHeader />
-      <RoundStatus role={roundRole} />
-      <Spectrum />
-      <ClueCard clue={state.round.clue} />
-      {roundRole === "mate" && (
-        <p className="dial-hint">ناقش الإجابة مع فريقك — المتحكم وحده يرسل الاختيار</p>
+    <div className="game-action-area">
+      {canControl ? (
+        <button type="button" className="btn btn-primary" disabled={!canSubmit} onClick={submit}>
+          {state.round.hasSubmitted
+            ? "✓ تم تثبيت الاختيار"
+            : state.guessPending
+              ? "جارٍ تثبيت الاختيار…"
+              : "تأكيد الإجابة"}
+        </button>
+      ) : (
+        <p role="status">بانتظار إجابة الفريق</p>
       )}
-      <div className="dial-stage">
-        <Dial
-          onTick={playTick}
-          angle={canControl ? state.round.myAngle : state.round.previewAngle}
-          interactive={canControl}
-          locked={locked}
-          playerId={state.playerId}
-          playerIndex={state.players.findIndex((player) => player.id === state.playerId)}
-          onDraft={(angle) => {
-            guess.current = angle;
-          }}
-          onChange={(angle) => {
-            store.dispatch({ type: "draft", angle });
-          }}
-          onPreview={(angle) => {
-            if (teamMode && canControl && state.roomCode)
-              controller.send("guess_preview", {
-                roomCode: state.roomCode,
-                roundNumber: state.round.roundNumber,
-                angle,
-                ...(state.round.card ? { cardId: state.round.card.id } : {}),
-              });
-          }}
-        />
-      </div>
-      <div className="game-action-area">
-        {canControl ? (
-          <button type="button" className="btn btn-primary" disabled={!canSubmit} onClick={submit}>
-            {state.round.hasSubmitted
-              ? "✓ تم تثبيت الاختيار"
-              : state.guessPending
-                ? "جارٍ تثبيت الاختيار…"
-                : "تأكيد الإجابة"}
-          </button>
-        ) : (
-          <p role="status">بانتظار إجابة الفريق</p>
-        )}
-        {state.joinError && <p role="alert">{state.joinError}</p>}
-      </div>
-      <ConnectionStatus />
-      <Coach key={canControl ? "guesser" : "observer"} role={canControl ? "guesser" : "observer"} />
-    </main>
+      {state.joinError && <p role="alert">{state.joinError}</p>}
+    </div>
   );
 }
 
-export function Psychic() {
+/** The server answers a target change within this deadline or the client re-states the round. */
+const TARGET_CHANGE_TIMEOUT_MS = 8_000;
+/** The confirmed sweep plus its landing pulse; both change controls wait for it. */
+const TARGET_SETTLE_MS = 600;
+
+/** Counters read as Arabic-Indic digits, matching the Arabic copy around them. */
+export function arabicDigits(value: number): string {
+  return String(Math.max(0, Math.round(value))).replace(
+    /\d/g,
+    (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)] ?? digit,
+  );
+}
+
+/** One identifier per deliberate click, so a rejection can be matched to its own request. */
+function createRequestId(): string {
+  const { crypto } = globalThis;
+  return typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** The clue form and both change controls; the scene above it owns the header and the dial. */
+export function PsychicActions() {
   const { store, controller } = useGame();
   const state = useSession((state) => state);
   const [pending, setPending] = useState(false);
-  const [skip, setSkip] = useState(false);
   /**
    * The replacement request stays pending only while it still belongs to this turn: the
    * round and card must match, no rejection may have arrived, the turn must not have used
@@ -349,16 +352,33 @@ export function Psychic() {
     cardId: string;
     snapshot: number;
   } | null>(null);
+  /**
+   * The answer-position request waits for its own acknowledgement: the same guardrails as the
+   * card change, plus a request id so only this attempt's rejection can end the wait.
+   */
+  const [targetRequest, setTargetRequest] = useState<{
+    requestId: string;
+    roundNumber: number;
+    cardId: string;
+    snapshot: number;
+  } | null>(null);
+  /** Set when the deadline passed, so the controls stay disabled until the round is restated. */
+  const [recovering, setRecovering] = useState<{ roundNumber: number; snapshot: number } | null>(
+    null,
+  );
+  /** The last live move whose sweep has finished; the difference drives the settling state. */
+  const [settledMoveId, setSettledMoveId] = useState(0);
   const clue = state.clueDraft;
-  const busy = pending && !state.joinError;
-  const activeTeam = state.teams.find((team) => team.id === state.round.activeTeamId);
+  const teamsMode = state.gameMode === "teams";
+  const clueBusy = pending && !state.joinError;
   const redrawUsed = state.round.redrawUsed;
-  const canRedraw =
-    state.round.redrawAvailable &&
-    !redrawUsed &&
-    !state.round.clue &&
-    state.round.targetAngle !== null &&
-    state.connection === "connected";
+  const targetRedraw = state.round.targetRedraw;
+  const targetUsed = targetRedraw.usedThisRound;
+  const targetExhausted = targetRedraw.supported && targetRedraw.remaining <= 0;
+  const turnOpen =
+    state.round.targetAngle !== null && !state.round.clue && !state.round.hasSubmitted;
+  const connected = state.connection === "connected";
+  const canRedraw = state.round.redrawAvailable && !redrawUsed && turnOpen && connected;
   const redrawPending =
     redrawRequest !== null &&
     redrawRequest.roundNumber === state.round.roundNumber &&
@@ -366,6 +386,30 @@ export function Psychic() {
     redrawRequest.snapshot === state.authoritativeRound &&
     !state.round.redrawUsed &&
     state.actionError?.event !== "redraw_card";
+  const rejectedTarget = state.actionError?.event === "redraw_target" ? state.actionError : null;
+  const targetPending =
+    targetRequest !== null &&
+    targetRequest.roundNumber === state.round.roundNumber &&
+    targetRequest.cardId === state.round.card?.id &&
+    targetRequest.snapshot === state.authoritativeRound &&
+    !targetUsed &&
+    // A rejection from an older attempt must not cancel this one.
+    !(
+      rejectedTarget &&
+      (rejectedTarget.requestId ?? targetRequest.requestId) === targetRequest.requestId
+    );
+  // A recovery is over once the round is restated, so nothing has to clear it.
+  const targetChecking =
+    recovering !== null &&
+    recovering.roundNumber === state.round.roundNumber &&
+    !(connected && state.authoritativeRound !== recovering.snapshot);
+  const moveId = state.targetMove?.id ?? 0;
+  const settling = moveId > settledMoveId;
+  const targetBusy = targetPending || targetChecking;
+  const canTargetRedraw =
+    targetRedraw.supported && !targetUsed && !targetExhausted && turnOpen && connected;
+  const changeBusy = redrawPending || targetBusy || settling;
+  const busy = clueBusy || changeBusy;
   /**
    * One explanation for the replacement control. The server names the blocker when it can,
    * and an older server that sends no reason gets the neutral wording instead of a guess.
@@ -378,7 +422,62 @@ export function Psychic() {
         ? "أحد المشاركين يستخدم نسخة أقدم من اللعبة، لذلك التغيير غير متاح الآن."
         : state.round.redrawAvailable
           ? "تغيير واحد مجاني قبل إرسال التلميح."
-          : "تغيير البطاقة غير متاح الآن. يمكنك المتابعة أو تخطي الدور.";
+          : "تغيير البطاقة غير متاح الآن. يمكنك المتابعة بالتلميح الحالي.";
+  /**
+   * One explanation for the position control, in the required precedence: a pending request
+   * or a recovery first, then the states the server can name, then the helper text.
+   */
+  const targetStatus = targetBusy
+    ? targetPending
+      ? "جارٍ تغيير المكان…"
+      : "جارٍ التحقق من حالة الجولة…"
+    : !targetRedraw.supported
+      ? "تغيير مكان الإجابة غير متاح في هذه النسخة."
+      : targetExhausted
+        ? "نفدت تغييرات المكان لهذه المباراة."
+        : targetUsed
+          ? "استُخدم تغيير المكان في هذا الدور."
+          : teamsMode
+            ? "مرة واحدة في الدور، وبحد أقصى ٣ مرات لفريقك خلال المباراة."
+            : "مرة واحدة في الدور، وبحد أقصى ٣ مرات لك خلال المباراة.";
+  const targetCounter =
+    targetRedraw.supported && !targetBusy
+      ? `${teamsMode ? "للفريق" : "لك"}: ${arabicDigits(targetRedraw.remaining)} / ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}`
+      : null;
+
+  // A request that never answers is not resent: the client asks recovery to restate the round.
+  useEffect(() => {
+    if (!targetRequest) return;
+    const deadline = targetRequest;
+    const timer = setTimeout(() => {
+      setTargetRequest((current) => (current === deadline ? null : current));
+      setRecovering({ roundNumber: deadline.roundNumber, snapshot: deadline.snapshot });
+      void controller.recover();
+    }, TARGET_CHANGE_TIMEOUT_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [targetRequest, controller]);
+  // The controls reopen when the confirmed sweep has landed; the state only records that.
+  useEffect(() => {
+    if (!moveId || moveId === settledMoveId) return;
+    const timer = setTimeout(() => {
+      setSettledMoveId(moveId);
+    }, TARGET_SETTLE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [moveId, settledMoveId]);
+  /**
+   * Only a live, applied change is announced; a recovered position arrives with no move token.
+   * The message stays for the whole turn it belongs to, and the next round replaces it.
+   */
+  const announcement =
+    state.targetMove?.roundNumber === state.round.roundNumber
+      ? teamsMode
+        ? `تغيّر مكان الإجابة. المتبقي لفريقك: ${arabicDigits(targetRedraw.remaining)} من ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}.`
+        : `تغيّر مكان الإجابة. المتبقي لك: ${arabicDigits(targetRedraw.remaining)} من ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}.`
+      : null;
   function submit() {
     if (!clue.trim() || state.round.clue || !state.roomCode || busy) return;
     store.dispatch({ type: "clear-error" });
@@ -388,10 +487,12 @@ export function Psychic() {
       roundNumber: state.round.roundNumber,
       clue: clue.trim(),
       ...(state.round.card ? { cardId: state.round.card.id } : {}),
+      // The clue belongs to the position it was written for; the server rejects a stale one.
+      targetRevision: targetRedraw.revision,
     });
   }
   function changeCard() {
-    if (!canRedraw || redrawPending || !state.roomCode || !state.round.card) return;
+    if (!canRedraw || changeBusy || !state.roomCode || !state.round.card) return;
     const cardId = state.round.card.id;
     store.dispatch({ type: "clear-error" });
     setRedrawRequest({
@@ -405,16 +506,29 @@ export function Psychic() {
       cardId,
     });
   }
+  function changeTarget() {
+    if (!canTargetRedraw || changeBusy || !state.roomCode || !state.round.card) return;
+    const cardId = state.round.card.id;
+    const requestId = createRequestId();
+    store.dispatch({ type: "clear-error" });
+    setTargetRequest({
+      requestId,
+      roundNumber: state.round.roundNumber,
+      cardId,
+      snapshot: state.authoritativeRound,
+    });
+    // The client never sends an angle, an owner or a remaining count: the server decides all
+    // three and answers with the confirmed position together with the new counters.
+    controller.send("redraw_target", {
+      roomCode: state.roomCode,
+      roundNumber: state.round.roundNumber,
+      cardId,
+      targetRevision: targetRedraw.revision,
+      requestId,
+    });
+  }
   return (
-    <main className="screen game game-shell">
-      <h1 className="sr-only">أنت الوسيط</h1>
-      <GameHeader />
-      <RoundStatus role="psychic" />
-      <Spectrum />
-      <p className="dial-hint">الهدف لك فقط — لا تُظهر الشاشة للآخرين</p>
-      <div className="dial-stage">
-        <Dial targetAngle={state.round.targetAngle} angle={null} />
-      </div>
+    <>
       {state.round.clue ? (
         <ClueCard clue={state.round.clue} />
       ) : (
@@ -450,24 +564,29 @@ export function Psychic() {
               state.connection !== "connected"
             }
           >
-            {busy ? "جارٍ إرسال التلميح…" : "أرسل التلميح"}
+            {/* The label describes the clue itself; another pending change only disables it. */}
+            {clueBusy ? "جارٍ إرسال التلميح…" : "أرسل التلميح"}
           </button>
           <div className="psychic-secondary-actions">
             <button
               type="button"
-              className="btn btn-ghost"
-              disabled={busy}
-              onClick={() => {
-                setSkip(true);
-              }}
+              className="btn btn-secondary"
+              disabled={!canTargetRedraw || changeBusy}
+              onClick={changeTarget}
+              aria-describedby="target-redraw-note"
             >
-              تخطي الدور (-1)
+              {targetBusy
+                ? targetPending
+                  ? "جارٍ تغيير المكان…"
+                  : "جارٍ التحقق من حالة الجولة…"
+                : "تغيير مكان الإجابة"}
             </button>
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={!canRedraw || redrawPending}
+              disabled={!canRedraw || changeBusy}
               onClick={changeCard}
+              aria-describedby="card-redraw-note"
             >
               {redrawUsed
                 ? "تم استخدام التغيير"
@@ -476,44 +595,20 @@ export function Psychic() {
                   : "تغيير البطاقة"}
             </button>
           </div>
-          <p className="redraw-note" role="status">
+          {/* Each control owns one explanation, so neither has to guess about the other. */}
+          <p className="secondary-note" id="target-redraw-note">
+            {targetCounter && <span className="secondary-count">{targetCounter}</span>}
+            <span>{targetStatus}</span>
+          </p>
+          <p className="redraw-note" id="card-redraw-note" role="status">
             {redrawNote}
+          </p>
+          <p className="sr-only" role="status" aria-live="polite">
+            {announcement}
           </p>
           {state.joinError && <p role="alert">{state.joinError}</p>}
         </form>
       )}
-      {skip && (
-        <Dialog
-          title="تخطي الدور؟"
-          onClose={() => {
-            setSkip(false);
-          }}
-        >
-          <p>
-            {activeTeam
-              ? `سيتم خصم نقطة واحدة من رصيد فريق ${activeTeam.name}`
-              : "سيتم خصم نقطة واحدة من رصيدك"}
-          </p>
-          <p>ينتقل الدور إلى الوسيط التالي، ولا يمكن التراجع.</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              if (state.roomCode && state.round.card)
-                controller.send("skip_round", {
-                  roomCode: state.roomCode,
-                  roundNumber: state.round.roundNumber,
-                  cardId: state.round.card.id,
-                });
-              setSkip(false);
-            }}
-          >
-            تأكيد التخطي (-1)
-          </button>
-        </Dialog>
-      )}
-      <ConnectionStatus />
-      {state.round.targetAngle !== null && <Coach role="psychic" />}
-    </main>
+    </>
   );
 }

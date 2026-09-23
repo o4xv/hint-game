@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { GameProvider } from "../src/ui/GameContext";
 import { GameHeader } from "../src/ui/Game";
 import { GameMenuProvider } from "../src/ui/GameMenu";
-import { Reveal } from "../src/ui/Results";
+import { Reveal } from "../src/ui/PlayScene";
 import { RoundStatus } from "../src/ui/RoundStatus";
 import { NEEDLE_COLORS, needleColor } from "../src/ui/dialGeometry";
 import { createSessionStore, initialSession, type SessionState } from "../src/session/store";
@@ -493,7 +493,8 @@ it("holds the previous total in the header until the score stage", () => {
   const score = () => screen.getByRole("button", { name: /نقاطي/ }).textContent;
   expect(score()).toContain("7");
   act(() => {
-    vi.advanceTimersByTime(600);
+    // The totals are released on the score stage of the shared reveal timeline.
+    vi.advanceTimersByTime(800);
   });
   expect(score()).toContain("10");
 });
