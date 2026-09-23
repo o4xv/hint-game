@@ -68,6 +68,12 @@ describe("session storage boundary", () => {
     expect(restoreSession(storage, 1_000_000).staleRoomCode).toBe("ABCD");
     expect(removed).toEqual(["hint_session"]);
     expect(
+      restoreSession(
+        { ...storage, getItem: () => JSON.stringify({ ...saved, lastActiveAt: null }) },
+        1_000_000,
+      ).staleRoomCode,
+    ).toBe("ABCD");
+    expect(
       readSession(
         { getItem: () => JSON.stringify({ ...saved, lastActiveAt: 1_060_001 }) },
         1_000_000,

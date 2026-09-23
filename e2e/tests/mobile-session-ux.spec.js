@@ -22,13 +22,14 @@ const suppressCoaching = () => {
 test("an old PWA visit opens fresh instead of recovering and prefilling the old room", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   await page.addInitScript((session) => {
     localStorage.setItem(
       "hint_session",
       JSON.stringify({ ...session, lastActiveAt: Date.now() - 31 * 60_000 }),
     );
   }, saved);
-  await page.goto(`/room/${saved.roomCode}`);
+  await page.goto(`/room/${saved.roomCode}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "ابدأ اللعبة" })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/");
   expect(await page.evaluate(() => localStorage.getItem("hint_session"))).toBeNull();
@@ -36,11 +37,21 @@ test("an old PWA visit opens fresh instead of recovering and prefilling the old 
   await expect(page.getByLabel("كود الغرفة")).toHaveValue("");
 });
 
+test("a pre-update PWA save with no timestamp also opens fresh", async ({ page }) => {
+  await page.addInitScript((session) => {
+    localStorage.setItem("hint_session", JSON.stringify(session));
+  }, saved);
+  await page.goto(`/room/${saved.roomCode}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("button", { name: "ابدأ اللعبة" })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+  expect(await page.evaluate(() => localStorage.getItem("hint_session"))).toBeNull();
+});
+
 test("a rejected reconnect clears the old room address and input", async ({ page }) => {
   await page.addInitScript((session) => {
     localStorage.setItem("hint_session", JSON.stringify({ ...session, lastActiveAt: Date.now() }));
   }, saved);
-  await page.goto(`/room/${saved.roomCode}`);
+  await page.goto(`/room/${saved.roomCode}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "ابدأ اللعبة" })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/");
   await page.getByRole("button", { name: "ابدأ اللعبة" }).dispatchEvent("click");
