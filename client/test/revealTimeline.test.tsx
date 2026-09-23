@@ -4,6 +4,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { GameProvider } from "../src/ui/GameContext";
 import { GameMenuProvider } from "../src/ui/GameMenu";
 import { Dial } from "../src/ui/Dial";
+import { pointOnDial } from "../src/ui/dialGeometry";
 import { PlayScene, Reveal } from "../src/ui/PlayScene";
 import { createSessionStore, initialSession } from "../src/session/store";
 import { playReveal, playScore } from "../src/session/audio";
@@ -394,6 +395,7 @@ it("sweeps only for a newly confirmed move and settles immediately on recovery",
 
   // A rising token is a confirmed change: it sweeps, then pulses as it lands.
   view.rerender(<Dial targetAngle={30} animateTarget moveToken={3} />);
+  expect(classes(".dial-zone-labels")).toContain("is-moving");
   act(() => {
     vi.advanceTimersByTime(0);
   });
@@ -426,4 +428,16 @@ it("sweeps only for a newly confirmed move and settles immediately on recovery",
   expect(classes(".dial-zones-rotor")).not.toContain("is-moving");
   expect(classes(".dial-zones-rotor")).not.toContain("is-landing");
   expect(classes(".dial-zone-labels")).not.toContain("is-moving");
+});
+
+it("centers scoring numbers in the visible band when the target nears either endpoint", () => {
+  const view = render(<Dial targetAngle={12} />);
+  const yellowLabels = () =>
+    [...document.querySelectorAll(".dial-zone-label")].filter((label) => label.textContent === "2");
+  expect(yellowLabels()).toHaveLength(2);
+  expect(Number(yellowLabels()[0]?.getAttribute("x"))).toBeCloseTo(pointOnDial(3, 129.6).x);
+
+  view.rerender(<Dial targetAngle={168} />);
+  expect(yellowLabels()).toHaveLength(2);
+  expect(Number(yellowLabels()[1]?.getAttribute("x"))).toBeCloseTo(pointOnDial(177, 129.6).x);
 });

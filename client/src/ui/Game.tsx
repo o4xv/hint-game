@@ -319,14 +319,6 @@ const TARGET_CHANGE_TIMEOUT_MS = 8_000;
 /** The confirmed sweep plus its landing pulse; both change controls wait for it. */
 const TARGET_SETTLE_MS = 600;
 
-/** Counters read as Arabic-Indic digits, matching the Arabic copy around them. */
-export function arabicDigits(value: number): string {
-  return String(Math.max(0, Math.round(value))).replace(
-    /\d/g,
-    (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)] ?? digit,
-  );
-}
-
 /** One identifier per deliberate click, so a rejection can be matched to its own request. */
 function createRequestId(): string {
   const { crypto } = globalThis;
@@ -436,14 +428,36 @@ export function PsychicActions() {
       : targetExhausted
         ? "نفدت تغييرات المكان لهذه المباراة."
         : targetUsed
-          ? "استُخدم تغيير المكان في هذا الدور."
+          ? `استُخدم تغيير المكان في هذا الدور. المتبقي: ${targetRedraw.remaining} من ${TARGET_REDRAWS_PER_MATCH}.`
           : teamsMode
-            ? "مرة واحدة في الدور، وبحد أقصى ٣ مرات لفريقك خلال المباراة."
-            : "مرة واحدة في الدور، وبحد أقصى ٣ مرات لك خلال المباراة.";
-  const targetCounter =
-    targetRedraw.supported && !targetBusy
-      ? `${teamsMode ? "للفريق" : "لك"}: ${arabicDigits(targetRedraw.remaining)} / ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}`
-      : null;
+            ? `مرة واحدة في الدور، وبحد أقصى ${TARGET_REDRAWS_PER_MATCH} مرات لفريقك خلال المباراة. المتبقي: ${targetRedraw.remaining}.`
+            : `مرة واحدة في الدور، وبحد أقصى ${TARGET_REDRAWS_PER_MATCH} مرات لك خلال المباراة. المتبقي: ${targetRedraw.remaining}.`;
+  const targetButtonLabel = targetBusy
+    ? targetPending
+      ? "جارٍ تغيير المكان…"
+      : "جارٍ التحقق من حالة الجولة…"
+    : "تغيير مكان الإجابة";
+  const targetCaption = targetBusy
+    ? "يرجى الانتظار"
+    : !targetRedraw.supported
+      ? "غير متاح"
+      : targetExhausted
+        ? "متبقي: 0"
+        : targetUsed
+          ? `باقي ${targetRedraw.remaining} · الدور القادم`
+          : `متبقي: ${targetRedraw.remaining} من ${TARGET_REDRAWS_PER_MATCH}`;
+  const cardButtonLabel = redrawUsed
+    ? "تم استخدام التغيير"
+    : redrawPending
+      ? "جارٍ تغيير البطاقة…"
+      : "تغيير البطاقة";
+  const cardCaption = redrawPending
+    ? "يرجى الانتظار"
+    : redrawUsed
+      ? "استُخدم هذا الدور"
+      : state.round.redrawAvailable
+        ? "1 مجاني لكل دور"
+        : "غير متاح الآن";
 
   // A request that never answers is not resent: the client asks recovery to restate the round.
   useEffect(() => {
@@ -477,8 +491,8 @@ export function PsychicActions() {
   const announcement =
     state.targetMove?.roundNumber === state.round.roundNumber
       ? teamsMode
-        ? `تغيّر مكان الإجابة. المتبقي لفريقك: ${arabicDigits(targetRedraw.remaining)} من ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}.`
-        : `تغيّر مكان الإجابة. المتبقي لك: ${arabicDigits(targetRedraw.remaining)} من ${arabicDigits(TARGET_REDRAWS_PER_MATCH)}.`
+        ? `تغيّر مكان الإجابة. المتبقي لفريقك: ${targetRedraw.remaining} من ${TARGET_REDRAWS_PER_MATCH}.`
+        : `تغيّر مكان الإجابة. المتبقي لك: ${targetRedraw.remaining} من ${TARGET_REDRAWS_PER_MATCH}.`
       : null;
   function submit() {
     if (!clue.trim() || state.round.clue || !state.roomCode || busy) return;
@@ -575,34 +589,33 @@ export function PsychicActions() {
               className="btn btn-secondary"
               disabled={!canTargetRedraw || changeBusy}
               onClick={changeTarget}
+              aria-label={targetButtonLabel}
               aria-describedby="target-redraw-note"
             >
-              {targetBusy
-                ? targetPending
-                  ? "جارٍ تغيير المكان…"
-                  : "جارٍ التحقق من حالة الجولة…"
-                : "تغيير مكان الإجابة"}
+              <span className="secondary-action-title">{targetButtonLabel}</span>
+              <span className="secondary-action-caption" aria-hidden="true">
+                {targetCaption}
+              </span>
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               disabled={!canRedraw || changeBusy}
               onClick={changeCard}
+              aria-label={cardButtonLabel}
               aria-describedby="card-redraw-note"
             >
-              {redrawUsed
-                ? "تم استخدام التغيير"
-                : redrawPending
-                  ? "جارٍ تغيير البطاقة…"
-                  : "تغيير البطاقة"}
+              <span className="secondary-action-title">{cardButtonLabel}</span>
+              <span className="secondary-action-caption" aria-hidden="true">
+                {cardCaption}
+              </span>
             </button>
           </div>
-          {/* Each control owns one explanation, so neither has to guess about the other. */}
-          <p className="secondary-note" id="target-redraw-note">
-            {targetCounter && <span className="secondary-count">{targetCounter}</span>}
-            <span>{targetStatus}</span>
+          {/* Keep detailed availability reasons for assistive technology without lengthening the UI. */}
+          <p className="sr-only" id="target-redraw-note">
+            {targetStatus}
           </p>
-          <p className="redraw-note" id="card-redraw-note" role="status">
+          <p className="sr-only" id="card-redraw-note" role="status">
             {redrawNote}
           </p>
           <p className="sr-only" role="status" aria-live="polite">

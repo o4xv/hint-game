@@ -190,9 +190,9 @@ it("applies the confirmed position atomically and clears the draft only then", (
     available({ remaining: 2, usedThisRound: true, revision: 1 }),
   );
   expect(state.clueDraft).toBe("");
-  expect(screen.getByText("لك: ٢ / ٣")).toBeTruthy();
-  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
-  expect(screen.getByText("تغيّر مكان الإجابة. المتبقي لك: ٢ من ٣.")).toBeTruthy();
+  expect(screen.getByText("باقي 2 · الدور القادم")).toBeTruthy();
+  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور. المتبقي: 2 من 3.")).toBeTruthy();
+  expect(screen.getByText("تغيّر مكان الإجابة. المتبقي لك: 2 من 3.")).toBeTruthy();
 });
 
 it("keeps the draft and restores the control after this attempt's rejection", () => {
@@ -243,7 +243,7 @@ it("asks for authoritative recovery after eight seconds without resending", () =
   expect(screen.getByRole("button", { name: "تغيير مكان الإجابة" }).hasAttribute("disabled")).toBe(
     true,
   );
-  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
+  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور. المتبقي: 2 من 3.")).toBeTruthy();
 });
 
 it("stops the request deadline once the server has answered", () => {
@@ -269,7 +269,7 @@ it("stops the request deadline once the server has answered", () => {
   // A success ends the wait: no recovery is asked for and no checking message appears.
   expect(recover).not.toHaveBeenCalled();
   expect(send).toHaveBeenCalledTimes(1);
-  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
+  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور. المتبقي: 2 من 3.")).toBeTruthy();
 });
 
 it("blocks the card change, the position change and the clue while one is pending", () => {
@@ -301,7 +301,7 @@ it("explains an unsupported, used, exhausted and available allowance", () => {
   });
   expect(changeTarget().hasAttribute("disabled")).toBe(true);
   expect(screen.getByText("نفدت تغييرات المكان لهذه المباراة.")).toBeTruthy();
-  expect(screen.getByText("لك: ٠ / ٣")).toBeTruthy();
+  expect(screen.getByText("متبقي: 0")).toBeTruthy();
   expect(exhausted.store.getSnapshot().round.targetRedraw.remaining).toBe(0);
   cleanup();
 
@@ -313,7 +313,7 @@ it("explains an unsupported, used, exhausted and available allowance", () => {
     },
   });
   expect(changeTarget().hasAttribute("disabled")).toBe(true);
-  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeTruthy();
+  expect(screen.getByText("استُخدم تغيير المكان في هذا الدور. المتبقي: 2 من 3.")).toBeTruthy();
   cleanup();
 
   // An older server sends no metadata at all, which normalises to "unsupported".
@@ -327,13 +327,15 @@ it("explains an unsupported, used, exhausted and available allowance", () => {
   renderPsychic({ overrides: { round: roundState({ targetRedraw: unsupportedTargetRedraw() }) } });
   expect(changeTarget().hasAttribute("disabled")).toBe(true);
   expect(screen.getByText("تغيير مكان الإجابة غير متاح في هذه النسخة.")).toBeTruthy();
-  expect(screen.queryByText(/^لك:/)).toBeNull();
+  expect(screen.queryByText(/^متبقي:/)).toBeNull();
   cleanup();
 
   renderPsychic();
   expect(changeTarget().hasAttribute("disabled")).toBe(false);
-  expect(screen.getByText("لك: ٣ / ٣")).toBeTruthy();
-  expect(screen.getByText("مرة واحدة في الدور، وبحد أقصى ٣ مرات لك خلال المباراة.")).toBeTruthy();
+  expect(screen.getByText("متبقي: 3 من 3")).toBeTruthy();
+  expect(
+    screen.getByText("مرة واحدة في الدور، وبحد أقصى 3 مرات لك خلال المباراة. المتبقي: 3."),
+  ).toBeTruthy();
 });
 
 it("keeps a draft only while the recovered round, card and position all match", () => {

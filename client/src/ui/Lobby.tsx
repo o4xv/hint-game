@@ -146,8 +146,8 @@ function TeamNameEditor({
       ? "انقطع الاتصال قبل وصول تأكيد الحفظ. أعد المحاولة عند عودة الاتصال."
       : retry === "timeout"
         ? timeouts > 1
-          ? "لم يصل تأكيد الحفظ خلال ٥ ثوانٍ مرتين. تحقّق من الاتصال، وإذا تكرر الأمر فقد يحتاج الخادم إلى تحديث."
-          : "لم يصل تأكيد الحفظ خلال ٥ ثوانٍ. تحقّق من الاتصال ثم حاول مرة أخرى."
+          ? "لم يصل تأكيد الحفظ خلال 5 ثوانٍ مرتين. تحقّق من الاتصال، وإذا تكرر الأمر فقد يحتاج الخادم إلى تحديث."
+          : "لم يصل تأكيد الحفظ خلال 5 ثوانٍ. تحقّق من الاتصال ثم حاول مرة أخرى."
         : null;
 
   if (!canEdit) return <span className="team-name">{team.name}</span>;
@@ -287,7 +287,7 @@ export function Lobby() {
     connectedPlayers.filter((player) => player.teamId === teamId).length;
   const teamStartIssue = (() => {
     if (state.gameMode !== "teams") return null;
-    if (connectedPlayers.length < 4) return "وضع الفرق يحتاج ٤ لاعبين على الأقل";
+    if (connectedPlayers.length < 4) return "وضع الفرق يحتاج 4 لاعبين على الأقل";
     const shortTeam = state.teams.find((team) => connectedInTeam(team.id) < 2);
     if (!shortTeam) return null;
     const missing = 2 - connectedInTeam(shortTeam.id);

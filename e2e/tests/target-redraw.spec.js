@@ -112,11 +112,11 @@ test("an individual clue giver changes the answer position and the round still s
     expect(before.targetRedraw.supported).toBe(true);
     expect(before.targetRedraw).toMatchObject({ remaining: 3, usedThisRound: false, revision: 0 });
 
-    // Both secondary actions are offered with equal weight, and their own explanations.
+    // Both secondary actions show their short allowances inside the buttons.
     await expect(psychic.getByRole("button", { name: "تغيير مكان الإجابة" })).toBeEnabled();
     await expect(psychic.getByRole("button", { name: "تغيير البطاقة" })).toBeEnabled();
-    await expect(psychic.getByText("لك: ٣ / ٣")).toBeVisible();
-    await expect(psychic.getByText(/مرة واحدة في الدور/)).toBeVisible();
+    await expect(psychic.getByText("متبقي: 3 من 3")).toBeVisible();
+    await expect(psychic.getByText("1 مجاني لكل دور")).toBeVisible();
     expect(await guesser.evaluate(() => window.__hintTest.getState().round.targetAngle)).toBeNull();
 
     const spectator = await spectatorContext.newPage();
@@ -134,6 +134,7 @@ test("an individual clue giver changes the answer position and the round still s
     await psychic.waitForFunction(
       () => window.__hintTest.getState().round.targetRedraw.revision === 1,
     );
+    await expect(psychic.locator(".dial-zone-labels")).toHaveCSS("visibility", "hidden");
     const after = await snapshot(psychic);
     expect(Math.abs(after.angle - before.angle)).toBeGreaterThanOrEqual(45);
     expect(after.angle).toBeGreaterThanOrEqual(6);
@@ -151,8 +152,9 @@ test("an individual clue giver changes the answer position and the round still s
     await expect(psychic.locator(".dial-zones-rotor")).not.toHaveClass(/is-moving/);
     // The scoring numbers stay upright instead of rotating with the bands.
     await expect(psychic.locator(".dial-zone-labels")).toHaveClass(/is-visible/);
+    await expect(psychic.locator(".dial-zone-labels")).toHaveCSS("visibility", "visible");
     await expect(psychic.getByRole("button", { name: "تغيير مكان الإجابة" })).toBeDisabled();
-    await expect(psychic.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeVisible();
+    await expect(psychic.getByText("باقي 2 · الدور القادم")).toBeVisible();
     // The other players still know nothing about the new position.
     expect(await guesser.evaluate(() => window.__hintTest.getState().round.targetAngle)).toBeNull();
 
@@ -340,15 +342,14 @@ test("a team shares one allowance across turns and keeps it away from other team
       teamsByTurn.push(activeTeamId);
 
       await expect(
-        psychicPage.getByText(round === 3 ? "للفريق: ٢ / ٣" : "للفريق: ٣ / ٣"),
+        psychicPage.getByText(round === 3 ? "متبقي: 2 من 3" : "متبقي: 3 من 3"),
       ).toBeVisible();
-      await expect(psychicPage.getByText(/وبحد أقصى ٣ مرات لفريقك خلال المباراة/)).toBeVisible();
       if (round === 1 || round === 2) {
         await psychicPage.getByRole("button", { name: "تغيير مكان الإجابة" }).click();
         await psychicPage.waitForFunction(
           () => window.__hintTest.getState().round.targetRedraw.revision === 1,
         );
-        await expect(psychicPage.getByText("للفريق: ٢ / ٣")).toBeVisible();
+        await expect(psychicPage.getByText("باقي 2 · الدور القادم")).toBeVisible();
       } else {
         // The same team returned: its spent use stayed spent, and this turn may spend another.
         expect(teamsByTurn[0]).toBe(activeTeamId);
@@ -356,7 +357,7 @@ test("a team shares one allowance across turns and keeps it away from other team
         await psychicPage.waitForFunction(
           () => window.__hintTest.getState().round.targetRedraw.revision === 1,
         );
-        await expect(psychicPage.getByText("للفريق: ١ / ٣")).toBeVisible();
+        await expect(psychicPage.getByText("باقي 1 · الدور القادم")).toBeVisible();
       }
       // Only the active team pays, and the other team keeps its own full allowance.
       const changed = await snapshot(psychicPage);
@@ -386,7 +387,11 @@ test("the new labels fit a narrow phone without overflow", async ({ browser }) =
     hasTouch: true,
   });
   const owner = await context.newPage();
-  const guestContext = await browser.newContext();
+  const guestContext = await browser.newContext({
+    viewport: { width: 320, height: 568 },
+    isMobile: true,
+    hasTouch: true,
+  });
   const guest = await guestContext.newPage();
   try {
     const roomCode = await createRoom(owner, "ريم");
@@ -397,7 +402,10 @@ test("the new labels fit a narrow phone without overflow", async ({ browser }) =
       () => window.__hintTest.getState().round.psychicId === window.__hintTest.getState().playerId,
     );
     const psychic = ownerIsPsychic ? owner : guest;
+    expect(psychic.viewportSize()?.width).toBe(320);
     await expect(psychic.getByRole("button", { name: "تغيير مكان الإجابة" })).toBeVisible();
+    await expect(psychic.getByText("متبقي: 3 من 3")).toBeVisible();
+    await expect(psychic.getByText("1 مجاني لكل دور")).toBeVisible();
     const overflow = await psychic.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );

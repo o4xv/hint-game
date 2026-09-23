@@ -23,6 +23,21 @@ const zones = [
   { outer: 16, inner: 6, color: "#FFE66D", points: 2 },
   { outer: 6, inner: 0, color: "#FF6B6B", points: 3 },
 ];
+/** Center each number in the visible part of its band, including near the dial endpoints. */
+function zoneLabelAngles(target: number, zone: (typeof zones)[number]) {
+  const ranges: [number, number][] = zone.inner
+    ? [
+        [target - zone.outer, target - zone.inner],
+        [target + zone.inner, target + zone.outer],
+      ]
+    : [[target - zone.outer, target + zone.outer]];
+  return ranges.flatMap(([start, end]) => {
+    const visibleStart = clampAngle(start);
+    const visibleEnd = clampAngle(end);
+    // A fragment narrower than a digit should stay unlabelled instead of spilling into its neighbour.
+    return visibleEnd - visibleStart >= 6 ? [(visibleStart + visibleEnd) / 2] : [];
+  });
+}
 /** The confirmed sweep, then the landing pulse: the whole settle takes about 600ms. */
 const TARGET_MOVE_SWEEP_MS = 450;
 const TARGET_MOVE_LANDED_MS = 600;
@@ -169,12 +184,18 @@ export const Dial = memo(function Dial({
   const id = useId().replaceAll(":", "");
   const [drag, setDrag] = useState<{ pointerId: number; angle: number } | null>(null);
   const [movePhase, setMovePhase] = useState<"idle" | "moving" | "landed" | "settled">("idle");
+  const [observedMoveToken, setObservedMoveToken] = useState(moveToken);
   const seenMoveToken = useRef(moveToken);
   const draft = useRef(angle ?? 90);
   const pointer = useRef<number | null>(null);
   const lastPreview = useRef(-Infinity);
   const enabled = interactive && !locked;
   const shownAngle = enabled && drag ? drag.angle : angle;
+  // The confirmed angle reaches render before the sweep effect starts. Hide labels on that
+  // very first frame too, or they briefly point at the new bands while the old ones remain.
+  const moveStarting =
+    animateTarget && moveToken !== undefined && moveToken > (observedMoveToken ?? 0);
+  const labelsMoving = moveStarting || movePhase === "moving";
   // The first token a mounted dial sees is its starting position, never a move to animate, and
   // only a rising token is a newly confirmed change. Recovery drops the token back to zero and
   // restores the authoritative position: that cancels any pending phase instead of sweeping.
@@ -184,6 +205,7 @@ export const Dial = memo(function Dial({
     seenMoveToken.current = moveToken;
     if (moveToken <= previousToken) {
       const settle = setTimeout(() => {
+        setObservedMoveToken(moveToken);
         setMovePhase("settled");
       }, 0);
       return () => {
@@ -195,6 +217,7 @@ export const Dial = memo(function Dial({
     const timers = reduced
       ? [
           setTimeout(() => {
+            setObservedMoveToken(moveToken);
             setMovePhase("landed");
           }, 0),
           setTimeout(() => {
@@ -203,6 +226,7 @@ export const Dial = memo(function Dial({
         ]
       : [
           setTimeout(() => {
+            setObservedMoveToken(moveToken);
             setMovePhase("moving");
           }, 0),
           // A bounded fallback instead of an animation event that may never arrive.
@@ -364,39 +388,31 @@ export const Dial = memo(function Dial({
           </g>
           {/* The numbers stay upright and never rotate with the bands. */}
           <g
-            className={`dial-zone-labels${movePhase === "moving" ? " is-moving" : ""}${
+            className={`dial-zone-labels${labelsMoving ? " is-moving" : ""}${
               zonesVisible ? " is-visible" : ""
             }`}
           >
             {zones.flatMap((zone) =>
-              (zone.inner
-                ? [
-                    targetAngle - (zone.outer + zone.inner) / 2,
-                    targetAngle + (zone.outer + zone.inner) / 2,
-                  ]
-                : [targetAngle]
-              )
-                .filter((position) => position >= 0 && position <= 180)
-                .map((position, index) => {
-                  const point = pointOnDial(position, 180 * 0.72);
-                  return (
-                    <text
-                      key={`${zone.points}-${index}`}
-                      x={point.x}
-                      y={point.y + 5}
-                      textAnchor="middle"
-                      fill="#fff"
-                      stroke="#1A1A2E"
-                      strokeWidth={2.5}
-                      paintOrder="stroke fill"
-                      fontSize={16}
-                      fontWeight={900}
-                      className="dial-zone-label"
-                    >
-                      {zone.points}
-                    </text>
-                  );
-                }),
+              zoneLabelAngles(targetAngle, zone).map((position, index) => {
+                const point = pointOnDial(position, 180 * 0.72);
+                return (
+                  <text
+                    key={`${zone.points}-${index}`}
+                    x={point.x}
+                    y={point.y + 5}
+                    textAnchor="middle"
+                    fill="#fff"
+                    stroke="#1A1A2E"
+                    strokeWidth={2.5}
+                    paintOrder="stroke fill"
+                    fontSize={16}
+                    fontWeight={900}
+                    className="dial-zone-label"
+                  >
+                    {zone.points}
+                  </text>
+                );
+              }),
             )}
           </g>
         </g>

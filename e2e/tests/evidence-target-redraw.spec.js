@@ -107,7 +107,7 @@ test("captures the controls, the movement and every reveal stage", async ({
     const guesser = ownerIsPsychic ? guest : owner;
 
     // 1. Both controls with a full allowance.
-    await expect(psychic.getByText("لك: ٣ / ٣")).toBeVisible();
+    await expect(psychic.getByText("متبقي: 3 من 3")).toBeVisible();
     await shot(psychic, "01-psychic-controls");
 
     // 2. The confirmed movement: captured while the bands travel, then once they land.
@@ -117,7 +117,9 @@ test("captures the controls, the movement and every reveal stage", async ({
     await psychic.waitForFunction(
       () => window.__hintTest.getState().round.targetRedraw.revision === 1,
     );
-    await expect(psychic.getByText("استُخدم تغيير المكان في هذا الدور.")).toBeVisible();
+    await expect(psychic.locator(".dial-zones-rotor")).not.toHaveClass(/is-moving/);
+    await expect(psychic.locator(".dial-zone-labels")).toHaveCSS("opacity", "1");
+    await expect(psychic.getByText("باقي 2 · الدور القادم")).toBeVisible();
     await shot(psychic, "03-position-landed-and-used");
     const target = await psychic.evaluate(() => window.__hintTest.getState().round.targetAngle);
 

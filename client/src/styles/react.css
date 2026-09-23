@@ -739,35 +739,24 @@
 }
 .psychic-secondary-actions .btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 66px;
   height: auto;
   padding: 8px 10px;
   font-size: 0.9rem;
   line-height: 1.25;
   white-space: normal;
+  flex-direction: column;
+  gap: 2px;
 }
-.redraw-note {
-  margin: 0;
-  text-align: center;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.82);
+.secondary-action-title,
+.secondary-action-caption {
+  display: block;
 }
-.secondary-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 6px;
-  margin: 0;
-  text-align: center;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.82);
-}
-.secondary-count {
-  font-weight: 700;
-  color: var(--color-yellow);
+.secondary-action-caption {
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.2;
+  opacity: 0.78;
   font-variant-numeric: tabular-nums;
 }
 .game-action-area .btn {
@@ -1005,7 +994,8 @@ g.is-dimmed {
 /* Old numbers leave while the bands travel and return once they have landed. */
 .dial-zone-labels.is-moving {
   opacity: 0;
-  transition: opacity 120ms linear;
+  visibility: hidden;
+  transition: none;
 }
 .dial-needle-entry {
   animation: dial-needle-entry 180ms cubic-bezier(0.23, 1, 0.32, 1) both;

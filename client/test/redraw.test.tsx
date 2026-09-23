@@ -149,9 +149,9 @@ it("keeps the answer-position control in the removed skip button's place", () =>
   });
   expect(screen.queryByRole("button", { name: /تخطي الدور/ })).toBeNull();
   expect(screen.getByRole("button", { name: "تغيير مكان الإجابة" })).toBeTruthy();
-  expect(screen.getByText("للفريق: ٣ / ٣")).toBeTruthy();
+  expect(screen.getByText("متبقي: 3 من 3")).toBeTruthy();
   expect(
-    screen.getByText("مرة واحدة في الدور، وبحد أقصى ٣ مرات لفريقك خلال المباراة."),
+    screen.getByText("مرة واحدة في الدور، وبحد أقصى 3 مرات لفريقك خلال المباراة. المتبقي: 3."),
   ).toBeTruthy();
 });
 
